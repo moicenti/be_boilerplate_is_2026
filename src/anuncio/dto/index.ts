@@ -1,0 +1,1 @@
+export * from './crear-comunicado.dto.js';
