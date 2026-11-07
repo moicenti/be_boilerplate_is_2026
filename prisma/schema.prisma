@@ -36,6 +36,9 @@ model User {
 
   role Role @default(RESIDENTE)
 
+  receivedPackages  Package[] @relation("PackageReceivedBy")
+  deliveredPackages Package[] @relation("PackageDeliveredBy")
+
   @@map("users")
 }
 
@@ -52,7 +55,45 @@ model Unit {
   description String
   createdAt   DateTime @default(now()) @map("created_at")
 
+  packages Package[]
+
   @@map("units")
+}
+
+enum PackageStatus {
+  PENDIENTE_RETIRO
+  ENTREGADO
+}
+
+model Package {
+  id                String        @id @default(uuid()) @db.Uuid
+  number            Int           @unique @default(autoincrement())
+  folio             String        @unique
+  recipientName     String        @map("recipient_name")
+  carrier           String
+  trackingReference String        @map("tracking_reference")
+  description       String
+  notes             String?
+  pickupCode        String        @map("pickup_code") @db.Char(6)
+  status            PackageStatus @default(PENDIENTE_RETIRO)
+
+  unitId String @map("unit_id") @db.Uuid
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  receivedById String   @map("received_by_id") @db.Uuid
+  receivedBy   User     @relation("PackageReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  deliveredTo   String?   @map("delivered_to")
+  deliveredById String?   @map("delivered_by_id") @db.Uuid
+  deliveredBy   User?     @relation("PackageDeliveredBy", fields: [deliveredById], references: [id], onDelete: Restrict)
+  deliveredAt   DateTime? @map("delivered_at")
+
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  @@index([status, receivedAt])
+  @@index([unitId])
+  @@map("packages")
 }
 
 model RefreshToken {
