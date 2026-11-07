@@ -17,6 +17,8 @@ export class UserResponseDto {
   @ApiProperty()
   isActive!: boolean;
 
+  unit!: string;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: Date;
 
@@ -26,6 +28,7 @@ export class UserResponseDto {
       email: user.email,
       isActive: user.isActive,
       createdAt: user.createdAt,
+      unit: user.unit
     };
   }
 }

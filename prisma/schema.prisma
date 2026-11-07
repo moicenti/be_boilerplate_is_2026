@@ -7,20 +7,11 @@
 generator client {
   provider = "prisma-client"
 
-  // `prisma-client-js` está deprecado. El generador nuevo exige un `output`
-  // explícito y genera dentro del proyecto en vez de node_modules.
-  // Tiene que caer dentro de src/ porque tsconfig.build.json compila
-  // únicamente ese directorio (rootDir: ./src, include: ["src"]).
   output = "../src/generated/prisma"
 
-  // Query compiler en WASM: sin binario nativo de Rust, lo que permite usar
-  // imágenes Alpine sin instalar libssl.
   engineType = "client"
   runtime    = "nodejs"
 
-  // El proyecto es ESM puro ("type": "module" + moduleResolution nodenext),
-  // así que el cliente se genera como ESM y sus imports relativos llevan la
-  // extensión .js que tsc espera al emitir.
   moduleFormat           = "esm"
   generatedFileExtension = "ts"
   importFileExtension    = "js"
@@ -39,6 +30,9 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  unit         String 
+  
+  reports       Report[]
 
   @@map("users")
 }
@@ -46,8 +40,6 @@ model User {
 model RefreshToken {
   id String @id @default(uuid()) @db.Uuid
 
-  // Se guarda el SHA-256 del token, nunca el token en claro: si se filtra la
-  // base, los refresh tokens emitidos no son utilizables.
   tokenHash String @unique @map("token_hash")
 
   userId String @map("user_id") @db.Uuid
@@ -59,4 +51,42 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+
+
+model Report {
+  id          String   @id @default(uuid()) @db.Uuid
+  folio       String   @unique
+  title       String
+  description String
+  category    String
+  location    String
+  status      String   @default("Abierto")
+  unit       String
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relación con el usuario que crea el reporte
+  userId      String   @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relación con las fotos
+  photos      ReportPhoto[]
+
+  @@map("reports")
+}
+
+model ReportPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String   // Ruta o URL del archivo guardado
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relación con el reporte
+  reportId  String   @map("report_id") @db.Uuid
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_photos")
 }
