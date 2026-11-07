@@ -7,6 +7,9 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { IncidenciasModule } from './incidencias/incidencias.module.js';
 
 @Module({
   imports: [
@@ -20,6 +23,11 @@ import { validateEnv } from '@Config';
     HealthModule,
     UsersModule,
     AuthModule,
+    IncidenciasModule,
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
   ],
   providers: [
     {

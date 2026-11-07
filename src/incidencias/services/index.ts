@@ -1,0 +1,1 @@
+export * from './incidencias.service.js'
