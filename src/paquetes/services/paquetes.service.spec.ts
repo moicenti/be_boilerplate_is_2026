@@ -62,6 +62,11 @@ function setup(
     create: vi.fn().mockImplementation((data) => Promise.resolve(data)),
     findById,
     markDeliveredIfPending: vi.fn().mockResolvedValue(marked),
+    findPage: vi.fn().mockResolvedValue({ items: [pending], total: 45 }),
+    pendingSummary: vi
+      .fn()
+      .mockResolvedValue({ pendingCount: 45, pendingRecipientCount: 30 }),
+    carriers: vi.fn().mockResolvedValue(['DHL', 'FedEx']),
   };
   const unidadesService = {
     findById: vi.fn().mockResolvedValue(foundUnit),
@@ -162,6 +167,54 @@ describe('PaquetesService.deliver', () => {
     await expect(service.deliver('pkg-id', deliverDto, guard)).rejects.toThrow(
       NotFoundException,
     );
+  });
+});
+
+describe('PaquetesService.list', () => {
+  it('pagina de 20 en 20 y pasa los filtros al repositorio', async () => {
+    const { service, packageRepository } = setup();
+
+    const result = await service.list({
+      estado: PackageStatus.PENDIENTE_RETIRO,
+      unidad: 'A-304',
+      empresa: 'DHL',
+      q: 'Ana',
+      page: 3,
+    });
+
+    expect(packageRepository.findPage).toHaveBeenCalledWith(
+      {
+        status: PackageStatus.PENDIENTE_RETIRO,
+        unitCode: 'A-304',
+        folio: undefined,
+        carrier: 'DHL',
+        search: 'Ana',
+      },
+      40,
+      20,
+    );
+    expect(result).toMatchObject({
+      page: 3,
+      pageSize: 20,
+      total: 45,
+      totalPages: 3,
+      pendingCount: 45,
+      pendingRecipientCount: 30,
+      carriers: ['DHL', 'FedEx'],
+    });
+  });
+
+  it('reporta al menos una página aunque no haya resultados', async () => {
+    const { service, packageRepository } = setup();
+    packageRepository.findPage.mockResolvedValueOnce({ items: [], total: 0 });
+
+    const result = await service.list({
+      estado: PackageStatus.PENDIENTE_RETIRO,
+      page: 1,
+    });
+
+    expect(result.totalPages).toBe(1);
+    expect(result.items).toEqual([]);
   });
 });
 

@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -25,6 +27,8 @@ import { PaquetesService } from '@Paquetes/services';
 import {
   CreatePackageDto,
   DeliverPackageDto,
+  ListPackagesQueryDto,
+  PackagePageResponseDto,
   PackageResponseDto,
 } from '@Paquetes/dto';
 import { Role, type User } from '@PrismaClient';
@@ -34,6 +38,22 @@ import { Role, type User } from '@PrismaClient';
 @Controller('paquetes')
 export class PaquetesController {
   constructor(private readonly paquetesService: PaquetesService) {}
+
+  @Get()
+  @Roles(Role.SEGURIDAD)
+  @ApiOperation({ summary: 'Lista los paquetes para la caseta de seguridad' })
+  @ApiOkResponse({ type: PackagePageResponseDto })
+  @ApiBadRequestResponse({ description: 'Filtros inválidos.' })
+  @ApiForbiddenResponse({ description: 'Solo el personal de seguridad.' })
+  async list(
+    @Query() query: ListPackagesQueryDto,
+  ): Promise<PackagePageResponseDto> {
+    const page = await this.paquetesService.list(query);
+    return {
+      ...page,
+      items: page.items.map((pkg) => PackageResponseDto.fromEntity(pkg)),
+    };
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)

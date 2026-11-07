@@ -8,13 +8,28 @@ import { randomInt, timingSafeEqual } from 'node:crypto';
 import {
   PackageRepository,
   type PackageWithRelations,
+  type PendingSummary,
 } from '@Paquetes/repositories';
 import { UnidadesService } from '@Unidades/services';
-import type { CreatePackageDto, DeliverPackageDto } from '@Paquetes/dto';
+import type {
+  CreatePackageDto,
+  DeliverPackageDto,
+  ListPackagesQueryDto,
+} from '@Paquetes/dto';
 import { PackageStatus, type User } from '@PrismaClient';
 
 const PICKUP_CODE_LENGTH = 6;
+const PAGE_SIZE = 20;
 const TIME_ZONE = 'America/El_Salvador';
+
+export interface PackagePage extends PendingSummary {
+  items: PackageWithRelations[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  carriers: string[];
+}
 
 @Injectable()
 export class PaquetesService {
@@ -78,6 +93,34 @@ export class PaquetesService {
       throw this.alreadyDelivered(updated);
     }
     return updated;
+  }
+
+  async list(query: ListPackagesQueryDto): Promise<PackagePage> {
+    const { items, total } = await this.packageRepository.findPage(
+      {
+        status: query.estado,
+        unitCode: query.unidad,
+        folio: query.folio,
+        carrier: query.empresa,
+        search: query.q,
+      },
+      (query.page - 1) * PAGE_SIZE,
+      PAGE_SIZE,
+    );
+    const [summary, carriers] = await Promise.all([
+      this.packageRepository.pendingSummary(),
+      this.packageRepository.carriers(),
+    ]);
+
+    return {
+      items,
+      page: query.page,
+      pageSize: PAGE_SIZE,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+      ...summary,
+      carriers,
+    };
   }
 
   buildFolio(number: number, date: Date): string {
