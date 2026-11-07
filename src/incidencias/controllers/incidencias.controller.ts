@@ -43,14 +43,14 @@ export class IncidenciasController {
       },
     }),
   )
-  async create(
-    @CurrentUser() user: {id: string}, 
-    @Body() createIncidenciaDto: CreateIncidenciaDto,
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
-    const photoUrls = files ? files.map((file) => `/uploads/${file.filename}`) : [];
-    return this.incidenciasService.create(user.id, createIncidenciaDto, photoUrls);
-  }
+ async create(
+  @CurrentUser() user: { id: string; unit?: string | null },
+  @Body() createIncidenciaDto: CreateIncidenciaDto,
+  @UploadedFiles() files: Express.Multer.File[],
+) {
+  const photoUrls = files ? files.map((file) => `/uploads/${file.filename}`) : [];
+  return this.incidenciasService.create(user, createIncidenciaDto, photoUrls);
+}
 
   @Get()
   async findAll(@CurrentUser() user: {id: string}) {

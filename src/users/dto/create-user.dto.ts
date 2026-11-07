@@ -26,4 +26,10 @@ export class CreateUserDto {
     message: 'La contraseña debe incluir al menos una minúscula, una mayúscula y un número.',
   })
   password!: string;
+
+  @IsString()
+  @Matches(/^[A-Z]+-(?:[1-9]\d*)$/, {
+  message: 'La unidad debe tener el formato A-12, AB-3321 (letras mayúsculas, guion, número sin ceros al inicio)',
+})
+  unit: string;
 }

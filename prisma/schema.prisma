@@ -1,3 +1,26 @@
+// Documentación: https://www.prisma.io/docs
+//
+// La URL de conexión NO vive acá: en Prisma 7 el CLI la lee desde
+// prisma.config.ts y el runtime la recibe vía driver adapter (PrismaPg),
+// configurado en src/prisma/prisma.service.ts.
+
+generator client {
+  provider = "prisma-client"
+
+  output = "../src/generated/prisma"
+
+  engineType = "client"
+  runtime    = "nodejs"
+
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -5,12 +28,32 @@ model User {
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  unit         String?  @default("A-304")
+
   refreshTokens RefreshToken[]
+  unit         String 
+  
   reports       Report[]
 
   @@map("users")
 }
+
+model RefreshToken {
+  id String @id @default(uuid()) @db.Uuid
+
+  tokenHash String @unique @map("token_hash")
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+
 
 model Report {
   id          String   @id @default(uuid()) @db.Uuid
@@ -20,16 +63,30 @@ model Report {
   category    String
   location    String
   status      String   @default("Abierto")
-
-  unit        String
-
+  unit       String
+  
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  // Relación con el usuario que crea el reporte
   userId      String   @map("user_id") @db.Uuid
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Relación con las fotos
   photos      ReportPhoto[]
 
   @@map("reports")
+}
+
+model ReportPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String   // Ruta o URL del archivo guardado
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relación con el reporte
+  reportId  String   @map("report_id") @db.Uuid
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_photos")
 }
