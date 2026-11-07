@@ -1,9 +1,16 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PaquetesService } from './paquetes.service.js';
-import type { PackageRepository } from '@Paquetes/repositories';
+import type {
+  PackageRepository,
+  PackageWithRelations,
+} from '@Paquetes/repositories';
 import type { UnidadesService } from '@Unidades/services';
-import type { CreatePackageDto } from '@Paquetes/dto';
-import type { Unit, User } from '@PrismaClient';
+import type { CreatePackageDto, DeliverPackageDto } from '@Paquetes/dto';
+import { PackageStatus, type Unit, type User } from '@PrismaClient';
 
 const unit: Unit = {
   id: '6f1c2a4e-1b2c-4d5e-8f90-123456789abc',
@@ -23,10 +30,38 @@ const dto: CreatePackageDto = {
   description: '1 caja mediana de cartón, cerrada.',
 };
 
-function setup(foundUnit: Unit | null = unit) {
+const pending = {
+  id: 'pkg-id',
+  status: PackageStatus.PENDIENTE_RETIRO,
+  pickupCode: '482913',
+  deliveredAt: null,
+  deliveredTo: null,
+} as unknown as PackageWithRelations;
+
+const delivered = {
+  ...pending,
+  status: PackageStatus.ENTREGADO,
+  deliveredAt: new Date('2026-11-06T16:26:00Z'),
+  deliveredTo: 'Ana Martínez',
+} as unknown as PackageWithRelations;
+
+const deliverDto: DeliverPackageDto = {
+  pickupCode: '482913',
+  deliveredTo: 'Ana Martínez',
+};
+
+function setup(
+  foundUnit: Unit | null = unit,
+  found: (PackageWithRelations | null)[] = [pending, delivered],
+  marked = true,
+) {
+  const findById = vi.fn();
+  found.forEach((value) => findById.mockResolvedValueOnce(value));
   const packageRepository = {
     nextNumber: vi.fn().mockResolvedValue(187),
     create: vi.fn().mockImplementation((data) => Promise.resolve(data)),
+    findById,
+    markDeliveredIfPending: vi.fn().mockResolvedValue(marked),
   };
   const unidadesService = {
     findById: vi.fn().mockResolvedValue(foundUnit),
@@ -61,6 +96,72 @@ describe('PaquetesService.register', () => {
     );
     expect(packageRepository.nextNumber).not.toHaveBeenCalled();
     expect(packageRepository.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('PaquetesService.deliver', () => {
+  it('marca el paquete como entregado con quien lo recoge y el guardia', async () => {
+    const { service, packageRepository } = setup();
+
+    const result = await service.deliver('pkg-id', deliverDto, guard);
+
+    const [id, data] = packageRepository.markDeliveredIfPending.mock.calls[0];
+    expect(id).toBe('pkg-id');
+    expect(data.deliveredTo).toBe('Ana Martínez');
+    expect(data.deliveredById).toBe(guard.id);
+    expect(data.deliveredAt).toBeInstanceOf(Date);
+    expect(result.status).toBe(PackageStatus.ENTREGADO);
+  });
+
+  it('responde 422 y no entrega si el código no coincide', async () => {
+    const { service, packageRepository } = setup();
+
+    await expect(
+      service.deliver(
+        'pkg-id',
+        { pickupCode: '000000', deliveredTo: deliverDto.deliveredTo },
+        guard,
+      ),
+    ).rejects.toThrow(
+      new UnprocessableEntityException(
+        'El código de retiro no corresponde a este paquete.',
+      ),
+    );
+    expect(packageRepository.markDeliveredIfPending).not.toHaveBeenCalled();
+  });
+
+  it('responde 409 con la fecha y quién lo recibió si ya fue entregado', async () => {
+    const { service, packageRepository } = setup(unit, [delivered]);
+
+    const error = await service
+      .deliver('pkg-id', deliverDto, guard)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ConflictException);
+    const body = (error as ConflictException).getResponse() as Record<
+      string,
+      unknown
+    >;
+    expect(body.deliveredTo).toBe('Ana Martínez');
+    expect(body.deliveredAt).toEqual(delivered.deliveredAt);
+    expect(body.message).toContain('Ana Martínez');
+    expect(packageRepository.markDeliveredIfPending).not.toHaveBeenCalled();
+  });
+
+  it('responde 409 si otro guardia lo entregó al mismo tiempo', async () => {
+    const { service } = setup(unit, [pending, delivered], false);
+
+    await expect(service.deliver('pkg-id', deliverDto, guard)).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('responde 404 si el paquete no existe', async () => {
+    const { service } = setup(unit, [null]);
+
+    await expect(service.deliver('pkg-id', deliverDto, guard)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 

@@ -1,26 +1,7 @@
-import { applyDecorators } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsOptional,
-  IsUUID,
-  Length,
-  type ValidationArguments,
-} from 'class-validator';
-
-function RequiredText(label: string, max: number, required = 'obligatorio') {
-  return applyDecorators(
-    Transform(({ value }: { value: unknown }) =>
-      typeof value === 'string' ? value.trim() : value,
-    ),
-    Length(1, max, {
-      message: ({ value }: ValidationArguments) =>
-        typeof value === 'string' && value.length > max
-          ? `${label} no puede superar los ${max} caracteres.`
-          : `${label} es ${required}.`,
-    }),
-  );
-}
+import { IsOptional, IsUUID, Length } from 'class-validator';
+import { RequiredText } from '@Common/decorators';
 
 export class CreatePackageDto {
   @ApiProperty({ format: 'uuid', description: 'Unidad destinataria.' })
