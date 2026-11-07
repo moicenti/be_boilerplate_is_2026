@@ -47,6 +47,10 @@
       "@Prisma/*": ["./src/prisma/*/index.ts"],
       "@Common/*": ["./src/common/*/index.ts"],
       "@Config": ["./src/config/index.ts"],
+      "@Unidades": ["./src/unidades/index.ts"],
+      "@Unidades/*": ["./src/unidades/*/index.ts"],
+      "@Paquetes": ["./src/paquetes/index.ts"],
+      "@Paquetes/*": ["./src/paquetes/*/index.ts"],
       "@PrismaClient": ["./src/generated/prisma/client.ts"],
       "@Incidencias/*": ["./src/incidencias/*/index.ts"]
     }
