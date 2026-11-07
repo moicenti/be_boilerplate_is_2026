@@ -55,6 +55,19 @@ export class PaquetesController {
     };
   }
 
+  @Get(':id')
+  @Roles(Role.SEGURIDAD, Role.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Detalle de un paquete' })
+  @ApiOkResponse({ type: PackageResponseDto })
+  @ApiNotFoundResponse({ description: 'El paquete no existe.' })
+  @ApiForbiddenResponse({ description: 'El rol no tiene acceso.' })
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<PackageResponseDto> {
+    const pkg = await this.paquetesService.findOne(id);
+    return PackageResponseDto.fromEntity(pkg);
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Roles(Role.SEGURIDAD)

@@ -95,6 +95,10 @@ export class PaquetesService {
     return updated;
   }
 
+  findOne(id: string): Promise<PackageWithRelations> {
+    return this.findOrFail(id);
+  }
+
   async list(query: ListPackagesQueryDto): Promise<PackagePage> {
     const { items, total } = await this.packageRepository.findPage(
       {

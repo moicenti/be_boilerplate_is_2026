@@ -262,6 +262,40 @@ describe('Paquetes (e2e) - H13', () => {
     );
   });
 
+  describe('GET /paquetes/:id (detalle)', () => {
+    it.each<TestUser>(['seguridad', 'admin'])(
+      'devuelve el paquete sin el código de retiro (%s)',
+      async (user) => {
+        const { id, folio } = await registerPackage();
+
+        const response = await http()
+          .get(`${API}/paquetes/${id}`)
+          .set(bearer(user))
+          .expect(200);
+
+        expect(response.body).toMatchObject({
+          id,
+          folio,
+          unit: { code: 'A-304' },
+        });
+        expect(response.body).not.toHaveProperty('pickupCode');
+      },
+    );
+
+    it('responde 404 si no existe y 403 a un residente', async () => {
+      const { id } = await registerPackage();
+
+      await http()
+        .get(`${API}/paquetes/3f1c2a4e-1b2c-4d5e-8f90-123456789abc`)
+        .set(bearer('seguridad'))
+        .expect(404);
+      await http()
+        .get(`${API}/paquetes/${id}`)
+        .set(bearer('residente'))
+        .expect(403);
+    });
+  });
+
   describe('GET /paquetes (listado de seguridad)', () => {
     it('lista solo los pendientes, con los totales y sin el código de retiro', async () => {
       const first = await registerPackage();
