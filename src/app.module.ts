@@ -7,6 +7,7 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import { AnunciosModule } from './anuncio/index.js';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { validateEnv } from '@Config';
     HealthModule,
     UsersModule,
     AuthModule,
+    AnunciosModule,
   ],
   providers: [
     {
