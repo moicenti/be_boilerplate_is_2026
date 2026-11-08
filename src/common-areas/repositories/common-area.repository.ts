@@ -28,6 +28,9 @@ export interface ScheduleData {
 export interface SaveCommonAreaData {
   name: string;
   capacity: number;
+  location: string;
+  blockDurationHours: number;
+  usageConditions: string | null;
   schedules: ScheduleData[];
 }
 
@@ -68,20 +71,20 @@ export class CommonAreaRepository {
       .then((count) => count > 0);
   }
 
-  async create({ name, capacity, schedules }: SaveCommonAreaData): Promise<CommonAreaWithSchedules> {
+  async create({ schedules, ...fields }: SaveCommonAreaData): Promise<CommonAreaWithSchedules> {
     try {
       return await this.prisma.commonArea.create({
-        data: { name, capacity, schedules: { create: schedules } },
+        data: { ...fields, schedules: { create: schedules } },
         include: WITH_SCHEDULES,
       });
     } catch (error) {
-      throw this.translateError(error, name);
+      throw this.translateError(error, fields.name);
     }
   }
 
   async update(
     id: number,
-    { name, capacity, schedules }: SaveCommonAreaData,
+    { schedules, ...fields }: SaveCommonAreaData,
     changes: CommonAreaChangeData[],
     changedById: string,
   ): Promise<CommonAreaWithSchedules> {
@@ -95,12 +98,12 @@ export class CommonAreaRepository {
         }
         return tx.commonArea.update({
           where: { id },
-          data: { name, capacity, schedules: { create: schedules } },
+          data: { ...fields, schedules: { create: schedules } },
           include: WITH_SCHEDULES,
         });
       });
     } catch (error) {
-      throw this.translateError(error, name);
+      throw this.translateError(error, fields.name);
     }
   }
 

@@ -112,11 +112,15 @@ enum CommonAreaStatus {
 }
 
 model CommonArea {
-  id        Int              @id @default(autoincrement())
-  name      String           @map("nombre")
-  capacity  Int              @map("capacidad")
-  status    CommonAreaStatus @default(ACTIVA) @map("estado")
-  createdAt DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
+  id                 Int              @id @default(autoincrement())
+  name               String           @map("nombre")
+  capacity           Int              @map("capacidad")
+  location           String           @map("ubicacion")
+  /// Duración en horas de cada bloque de reserva.
+  blockDurationHours Int              @map("duracion_bloque_horas")
+  usageConditions    String?          @map("condiciones_uso")
+  status             CommonAreaStatus @default(ACTIVA) @map("estado")
+  createdAt          DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   // Eliminación lógica: quién y cuándo.
   deletedAt   DateTime? @map("eliminado_en") @db.Timestamptz(6)
@@ -171,9 +175,10 @@ model CommonAreaBlock {
 enum CommonAreaChangeField {
   CAPACIDAD
   HORARIOS
+  DURACION_BLOQUE
 }
 
-/// Historial de cambios de capacidad y horario de un área.
+/// Historial de cambios de capacidad, horario y duración de bloque de un área.
 model CommonAreaChange {
   id            Int                   @id @default(autoincrement())
   areaId        Int                   @map("area_id")

@@ -301,8 +301,8 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
 | `GET` | `/areas` | Bearer | `200` | Lista las áreas comunes activas con sus horarios (H6) |
 | `GET` | `/areas/{id}` | Bearer | `200` | Consulta un área común activa (H6) |
-| `POST` | `/areas` | Bearer · `ADMINISTRADOR` | `201` | Crea un área común con sus horarios (H6) |
-| `PUT` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza nombre, capacidad y horarios; registra en el historial los cambios de capacidad y horario (H6) |
+| `POST` | `/areas` | Bearer · `ADMINISTRADOR` | `201` | Crea un área común: nombre, capacidad, ubicación, duración de bloque (horas), condiciones de uso (opcional) y horarios (H6) |
+| `PUT` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza todos los datos del área y sus horarios; registra en el historial los cambios de capacidad, duración de bloque y horario (H6) |
 | `DELETE` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `204` | Eliminación lógica; `409` si el área tiene reservas pendientes o confirmadas por realizarse (H6) |
 | `GET` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `200` | Lista los bloqueos de un área |
 | `POST` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `201` | Bloquea un horario: mismo día, dentro del horario del área, sin superponerse con otros bloqueos ni con reservas pendientes o confirmadas |

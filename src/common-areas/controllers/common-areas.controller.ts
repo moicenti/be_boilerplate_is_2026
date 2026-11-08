@@ -84,7 +84,7 @@ export class CommonAreasController {
 
   @Put(':id')
   @Roles(Role.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Reemplaza nombre, capacidad y horarios de un área' })
+  @ApiOperation({ summary: 'Reemplaza los datos y horarios de un área' })
   @ApiOkResponse({ type: CommonAreaResponseDto })
   @ApiBadRequestResponse({ description: 'SOLICITUD_INVALIDA' })
   @ApiForbiddenResponse({ description: 'ROL_NO_PERMITIDO' })

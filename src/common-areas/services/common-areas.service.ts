@@ -9,7 +9,7 @@ import {
 } from '../repositories/index.js';
 import { CommonAreaNameTakenError } from '../errors/index.js';
 import type { SaveCommonAreaDto, ScheduleDto } from '../dto/index.js';
-import { formatTime, parseTime } from '../utils/time.js';
+import { formatTime, parseTime, timeToSeconds } from '../utils/time.js';
 import { BLOCKING_RESERVATION_STATUSES } from '../constants.js';
 
 type ScheduleSnapshot = { diaSemana: number; horaApertura: string; horaCierre: string };
@@ -86,9 +86,12 @@ export class CommonAreasService {
     await this.commonAreaRepository.softDelete(id, user.id, now);
   }
 
-  private validateBusinessRules({ capacidad, horarios }: SaveCommonAreaDto): void {
+  private validateBusinessRules({ capacidad, duracionBloque, horarios }: SaveCommonAreaDto): void {
     if (capacidad <= 0) {
       throw this.invalidData('La capacidad debe ser mayor a 0.');
+    }
+    if (duracionBloque <= 0) {
+      throw this.invalidData('La duración del bloque debe ser de al menos 1 hora.');
     }
 
     const seenDays = new Set<number>();
@@ -104,6 +107,15 @@ export class CommonAreasService {
       if (schedule.horaCierre <= schedule.horaApertura) {
         throw this.invalidData(
           `La hora de cierre debe ser posterior a la de apertura (día ${schedule.diaSemana}).`,
+        );
+      }
+
+      // Un bloque más largo que el horario del día nunca podría reservarse.
+      const openSeconds =
+        timeToSeconds(parseTime(schedule.horaCierre)) - timeToSeconds(parseTime(schedule.horaApertura));
+      if (duracionBloque * 3600 > openSeconds) {
+        throw this.invalidData(
+          `La duración del bloque (${duracionBloque} h) excede el horario del día ${schedule.diaSemana}.`,
         );
       }
     }
@@ -126,6 +138,14 @@ export class CommonAreasService {
         field: CommonAreaChangeField.CAPACIDAD,
         previousValue: current.capacity,
         newValue: dto.capacidad,
+      });
+    }
+
+    if (current.blockDurationHours !== dto.duracionBloque) {
+      changes.push({
+        field: CommonAreaChangeField.DURACION_BLOQUE,
+        previousValue: current.blockDurationHours,
+        newValue: dto.duracionBloque,
       });
     }
 
@@ -159,6 +179,9 @@ export class CommonAreasService {
     return {
       name: dto.nombre,
       capacity: dto.capacidad,
+      location: dto.ubicacion,
+      blockDurationHours: dto.duracionBloque,
+      usageConditions: dto.condicionesUso ?? null,
       schedules: dto.horarios.map((schedule) => ({
         dayOfWeek: schedule.diaSemana,
         opensAt: parseTime(schedule.horaApertura),

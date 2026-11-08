@@ -17,6 +17,9 @@ function buildDto(overrides: Partial<SaveCommonAreaDto> = {}): SaveCommonAreaDto
   return {
     nombre: 'Salón social',
     capacidad: 40,
+    ubicacion: 'Torre A, nivel 1',
+    duracionBloque: 2,
+    condicionesUso: null,
     horarios: [{ diaSemana: 6, horaApertura: '09:00', horaCierre: '22:00' }],
     ...overrides,
   };
@@ -27,6 +30,9 @@ function buildArea(): CommonAreaWithSchedules {
     id: 1,
     name: 'Salón social',
     capacity: 40,
+    location: 'Torre A, nivel 1',
+    blockDurationHours: 2,
+    usageConditions: null,
     status: 'ACTIVA',
     createdAt: new Date(),
     deletedAt: null,
@@ -68,6 +74,9 @@ describe('CommonAreasService', () => {
       expect(repository.create).toHaveBeenCalledWith({
         name: 'Salón social',
         capacity: 40,
+        location: 'Torre A, nivel 1',
+        blockDurationHours: 2,
+        usageConditions: null,
         schedules: [{ dayOfWeek: 6, opensAt: parseTime('09:00'), closesAt: parseTime('22:00') }],
       });
     });
@@ -79,6 +88,32 @@ describe('CommonAreasService', () => {
         'DATOS_INVALIDOS',
       );
       expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it.each([0, -1])('rechaza duración de bloque %i con 422', async (duracionBloque) => {
+      await expectApiError(
+        service.create(buildDto({ duracionBloque })),
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'DATOS_INVALIDOS',
+      );
+    });
+
+    it('rechaza un bloque más largo que el horario de algún día con 422', async () => {
+      const horarios = [
+        { diaSemana: 1, horaApertura: '08:00', horaCierre: '20:00' },
+        { diaSemana: 2, horaApertura: '08:00', horaCierre: '09:30' },
+      ];
+      await expectApiError(
+        service.create(buildDto({ duracionBloque: 2, horarios })),
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'DATOS_INVALIDOS',
+      );
+    });
+
+    it('acepta un bloque igual a la duración del horario', async () => {
+      const horarios = [{ diaSemana: 1, horaApertura: '08:00', horaCierre: '10:00' }];
+      await service.create(buildDto({ duracionBloque: 2, horarios }));
+      expect(repository.create).toHaveBeenCalled();
     });
 
     it.each([
@@ -128,9 +163,16 @@ describe('CommonAreasService', () => {
       expect(repository.existsActiveByName).toHaveBeenCalledWith('Salón social', 1);
     });
 
-    it('no registra historial si no cambian capacidad ni horarios', async () => {
+    it('no registra historial si no cambian capacidad, duración de bloque ni horarios', async () => {
       await service.update(1, buildDto({ nombre: 'Salón de eventos' }), admin);
       expect(repository.update).toHaveBeenCalledWith(1, expect.anything(), [], admin.id);
+    });
+
+    it('registra en el historial el cambio de duración de bloque', async () => {
+      await service.update(1, buildDto({ duracionBloque: 3 }), admin);
+
+      const changes = repository.update.mock.calls[0][2];
+      expect(changes).toEqual([{ field: 'DURACION_BLOQUE', previousValue: 2, newValue: 3 }]);
     });
 
     it('registra en el historial los cambios de capacidad y horario', async () => {

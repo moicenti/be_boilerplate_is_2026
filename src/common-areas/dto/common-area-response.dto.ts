@@ -14,6 +14,15 @@ export class CommonAreaResponseDto {
   @ApiProperty({ example: 40 })
   capacidad!: number;
 
+  @ApiProperty({ example: 'Torre A, nivel 1' })
+  ubicacion!: string;
+
+  @ApiProperty({ example: 2, description: 'Horas por bloque de reserva' })
+  duracionBloque!: number;
+
+  @ApiProperty({ example: 'No se permite música después de las 21:00.', nullable: true, type: String })
+  condicionesUso!: string | null;
+
   @ApiPropertyOptional({ enum: ['ACTIVA', 'ELIMINADA'] })
   estado?: CommonAreaStatus;
 
@@ -28,6 +37,9 @@ export class CommonAreaResponseDto {
       id: area.id,
       nombre: area.name,
       capacidad: area.capacity,
+      ubicacion: area.location,
+      duracionBloque: area.blockDurationHours,
+      condicionesUso: area.usageConditions,
       ...(includeStatus ? { estado: area.status } : {}),
       horarios: area.schedules.map((schedule) => ({
         diaSemana: schedule.dayOfWeek,
