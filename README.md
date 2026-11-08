@@ -246,6 +246,10 @@ npm run db:reset
 | Email | Contraseña |
 |---|---|
 | `demo@example.com` | `Demo1234!` |
+| `otro@example.com` | `Demo1234!` |
+| `admin@example.com` (rol `ADMINISTRADOR`) | `Demo1234!` |
+
+Los usuarios nuevos se crean con rol `RESIDENTE`. Los endpoints restringidos por rol usan `@Roles(Role.ADMINISTRADOR)` junto con `@UseGuards(RolesGuard)` y responden `403 ROL_NO_PERMITIDO`.
 
 ---
 
@@ -294,6 +298,13 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
+| `GET` | `/areas` | Bearer | `200` | Lista las áreas comunes activas con sus horarios (H6) |
+| `GET` | `/areas/{id}` | Bearer | `200` | Consulta un área común activa (H6) |
+| `POST` | `/areas` | Bearer · `ADMINISTRADOR` | `201` | Crea un área común con sus horarios (H6) |
+| `PUT` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza nombre, capacidad y horarios; registra en el historial los cambios de capacidad y horario (H6) |
+| `DELETE` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `204` | Eliminación lógica; `409` si el área tiene reservas pendientes o confirmadas por realizarse (H6) |
+
+Los endpoints de áreas responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 
 ### Ejemplos
 

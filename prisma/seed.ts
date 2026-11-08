@@ -27,6 +27,14 @@ async function main() {
   });
 
   console.log(`Usuario demo listo: ${user2.email} / ${DEMO_PASSWORD}`);
+
+  const admin = await prisma.user.upsert({
+    where: { email: "admin@example.com" },
+    update: { role: "ADMINISTRADOR" },
+    create: { email: "admin@example.com", passwordHash, unit: "ADMIN", role: "ADMINISTRADOR" },
+  });
+
+  console.log(`Administrador demo listo: ${admin.email} / ${DEMO_PASSWORD}`);
 }
 
 try {
