@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/services/prisma.service.js';
 import { CrearComunicadoDto } from '../dto/index.js';
-import { ComunicadoOficial } from '../../generated/prisma/index.js';
+// import { ComunicadoOficial } from '../../generated/prisma/index.js';
+import { ComunicadoOficial } from '@PrismaClient';
 
 export interface ArchivoAdjuntoData {
   nombreOriginal: string;

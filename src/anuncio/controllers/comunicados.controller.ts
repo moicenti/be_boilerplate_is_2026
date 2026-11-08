@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
+import type { Request } from 'express';
 import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ComunicadosService } from '../services/index.js';
@@ -33,7 +34,7 @@ export class ComunicadosController {
   @UseInterceptors(
     FilesInterceptor('archivos', 2, {
       limits: { fileSize: MAX_FILE_SIZE, files: 2 },
-      fileFilter: (_req, file, callback) => {
+      fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
         if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
           return callback(
             new BadRequestException(
@@ -46,7 +47,11 @@ export class ComunicadosController {
       },
       storage: diskStorage({
         destination: './public/uploads/anuncios',
-        filename: (_req, file, cb) => {
+        filename: (
+          _req: Request,
+          file: Express.Multer.File,
+          cb: (error: Error | null, filename: string) => void,
+        ) => {
           const extension = extname(file.originalname);
           cb(null, `${randomUUID()}${extension}`);
         },

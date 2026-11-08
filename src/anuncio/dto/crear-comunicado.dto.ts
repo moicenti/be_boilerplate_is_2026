@@ -1,5 +1,5 @@
 import { IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
-import { CategoriaComunicado, PrioridadComunicado, AudienciaTipo } from '../../generated/prisma/index.js';
+import { CategoriaComunicado, PrioridadComunicado, AudienciaTipo } from '@PrismaClient';
 
 export class CrearComunicadoDto {
   @IsString({ message: 'El título debe ser un texto' })
