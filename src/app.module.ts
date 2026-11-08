@@ -7,6 +7,8 @@ import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
 import { validateEnv } from '@Config';
+import {ScheduleModule} from '@nestjs/schedule';
+import { NotificacionesModule } from '@Notificaciones';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { validateEnv } from '@Config';
     HealthModule,
     UsersModule,
     AuthModule,
+    ScheduleModule.forRoot(),
+    NotificacionesModule,
   ],
   providers: [
     {

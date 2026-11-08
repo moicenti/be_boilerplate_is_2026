@@ -60,3 +60,74 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+enum EstadoNotificacion {
+  PENDIENTE
+  ENVIADA
+  FALLIDO
+  FALLIDO_PERMANENTE
+}
+
+model PreferenciaNotificacion {
+  id           Int     @id @default(autoincrement())
+  residenteId  String  @map("residente_id") @db.Uuid
+  moduloOrigen String  @map("modulo_origen")
+  activo       Boolean @default(true)
+
+  residente User @relation(fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@unique([residenteId, moduloOrigen])
+  @@map("preferencia_notificacion")
+}
+
+model LoteNotificacion {
+  id            Int      @id @default(autoincrement())
+  moduloOrigen  String   @map("modulo_origen")
+  emitidoPorId  String?  @map("emitido_por") @db.Uuid
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz
+
+  emitidoPor     User?          @relation("LotesEmitidos", fields: [emitidoPorId], references: [id])
+  notificaciones Notificacion[]
+
+  @@map("lote_notificacion")
+}
+
+model Notificacion {
+  id            Int                @id @default(autoincrement())
+  loteId        Int                @map("lote_id")
+  residenteId   String             @map("residente_id") @db.Uuid
+  unidadId      Int?               @map("unidad_id")
+  tipo          String
+  titulo        String
+  mensaje       String
+  moduloOrigen  String             @map("modulo_origen")
+  enlaceAccion  String?            @map("enlace_accion")
+  leida         Boolean            @default(false)
+  fechaLectura  DateTime?          @map("fecha_lectura") @db.Timestamptz
+  forzada       Boolean            @default(false)
+  estado        EstadoNotificacion @default(PENDIENTE)
+  fechaCreacion DateTime           @default(now()) @map("fecha_creacion") @db.Timestamptz
+
+  lote      LoteNotificacion @relation(fields: [loteId], references: [id])
+  residente User             @relation("NotificacionesRecibidas", fields: [residenteId], references: [id])
+  unidad    Unit?            @relation(fields: [unidadId], references: [id])
+  intentos  IntentoEnvio[]
+
+  @@index([estado])
+  @@index([residenteId])
+  @@map("notificacion")
+}
+
+model IntentoEnvio {
+  id             Int      @id @default(autoincrement())
+  notificacionId Int      @map("notificacion_id")
+  numeroIntento  Int      @map("numero_intento")
+  motivoFallo    String?  @map("motivo_fallo")
+  fechaIntento   DateTime @default(now()) @map("fecha_intento") @db.Timestamptz
+
+  notificacion Notificacion @relation(fields: [notificacionId], references: [id], onDelete: Cascade)
+
+  @@unique([notificacionId, numeroIntento])
+  @@index([notificacionId])
+  @@map("intento_envio")
+}
