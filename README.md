@@ -81,6 +81,7 @@ cp .env.example .env
 | `JWT_EXPIRES_IN` | `15m` | Vigencia del access token |
 | `REFRESH_TOKEN_EXPIRES_IN_DAYS` | `7` | Vigencia del refresh token |
 | `BCRYPT_SALT_ROUNDS` | `12` | Cost factor de bcrypt |
+| `APP_TIMEZONE` | `America/El_Salvador` | Zona horaria IANA en la que se interpretan los horarios de las áreas comunes |
 
 > La app **valida el entorno al arrancar** ([env.validation.ts](src/config/env.validation.ts)). Si falta `DATABASE_URL` o `JWT_SECRET`, o si el secreto es más corto que 32 caracteres, falla de inmediato con un mensaje claro en lugar de romperse más tarde.
 
@@ -303,6 +304,9 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/areas` | Bearer · `ADMINISTRADOR` | `201` | Crea un área común con sus horarios (H6) |
 | `PUT` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza nombre, capacidad y horarios; registra en el historial los cambios de capacidad y horario (H6) |
 | `DELETE` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `204` | Eliminación lógica; `409` si el área tiene reservas pendientes o confirmadas por realizarse (H6) |
+| `GET` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `200` | Lista los bloqueos de un área |
+| `POST` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `201` | Bloquea un horario: mismo día, dentro del horario del área, sin superponerse con otros bloqueos ni con reservas pendientes o confirmadas |
+| `DELETE` | `/areas/{id}/bloqueos/{bloqueoId}` | Bearer · `ADMINISTRADOR` | `204` | Elimina un bloqueo que aún no terminó |
 
 Los endpoints de áreas responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 

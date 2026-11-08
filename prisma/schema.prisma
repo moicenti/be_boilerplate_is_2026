@@ -38,6 +38,7 @@ model User {
 
   deletedCommonAreas CommonArea[]       @relation("CommonAreaDeletedBy")
   commonAreaChanges  CommonAreaChange[]
+  commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
 
   @@map("users")
@@ -159,7 +160,11 @@ model CommonAreaBlock {
   endsAt   DateTime              @map("fin") @db.Timestamptz(6)
   reason   CommonAreaBlockReason @map("motivo")
 
-  @@index([areaId])
+  createdAt   DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+  createdById String?  @map("creado_por") @db.Uuid
+  createdBy   User?    @relation("CommonAreaBlockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([areaId, startsAt])
   @@map("bloqueo_area")
 }
 

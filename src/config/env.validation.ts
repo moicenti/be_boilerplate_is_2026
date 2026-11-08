@@ -14,6 +14,8 @@ export interface EnvConfig {
   JWT_EXPIRES_IN: string;
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
   BCRYPT_SALT_ROUNDS: number;
+  /** Zona horaria IANA en la que se interpretan los horarios de las áreas. */
+  APP_TIMEZONE: string;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -69,6 +71,15 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
   }
 
+  const timezone = readString(raw, 'APP_TIMEZONE', 'America/El_Salvador');
+  try {
+    new Intl.DateTimeFormat('es', { timeZone: timezone });
+  } catch {
+    throw new Error(
+      `APP_TIMEZONE "${timezone}" no es una zona horaria IANA válida (ej. America/El_Salvador).`,
+    );
+  }
+
   return {
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
@@ -77,5 +88,6 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
     REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
+    APP_TIMEZONE: timezone,
   };
 }

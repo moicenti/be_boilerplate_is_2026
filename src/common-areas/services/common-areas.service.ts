@@ -1,9 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import {
-  CommonAreaChangeField,
-  ReservationStatus,
-  type User,
-} from '@PrismaClient';
+import { CommonAreaChangeField, type User } from '@PrismaClient';
 import { ApiException } from '@Common/errors';
 import {
   CommonAreaRepository,
@@ -14,13 +10,9 @@ import {
 import { CommonAreaNameTakenError } from '../errors/index.js';
 import type { SaveCommonAreaDto, ScheduleDto } from '../dto/index.js';
 import { formatTime, parseTime } from '../utils/time.js';
+import { BLOCKING_RESERVATION_STATUSES } from '../constants.js';
 
 type ScheduleSnapshot = { diaSemana: number; horaApertura: string; horaCierre: string };
-
-export const BLOCKING_RESERVATION_STATUSES: readonly ReservationStatus[] = [
-  ReservationStatus.PENDIENTE,
-  ReservationStatus.CONFIRMADA,
-];
 
 @Injectable()
 export class CommonAreasService {
@@ -84,7 +76,6 @@ export class CommonAreasService {
       now,
     );
     if (upcoming > 0) {
-      // El diseño técnico asigna AREA_DUPLICADA (409) también a este caso.
       throw new ApiException(
         HttpStatus.CONFLICT,
         'AREA_DUPLICADA',
@@ -95,7 +86,6 @@ export class CommonAreasService {
     await this.commonAreaRepository.softDelete(id, user.id, now);
   }
 
-  /** Reglas que responden 422 DATOS_INVALIDOS. */
   private validateBusinessRules({ capacidad, horarios }: SaveCommonAreaDto): void {
     if (capacidad <= 0) {
       throw this.invalidData('La capacidad debe ser mayor a 0.');
@@ -125,7 +115,6 @@ export class CommonAreasService {
     }
   }
 
-  /** Cambios de capacidad y horario que deben quedar en el historial. */
   private detectChanges(
     current: CommonAreaWithSchedules,
     dto: SaveCommonAreaDto,

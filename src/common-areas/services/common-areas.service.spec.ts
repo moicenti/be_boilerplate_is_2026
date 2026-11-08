@@ -1,10 +1,8 @@
 import { HttpStatus } from '@nestjs/common';
 import type { User } from '@PrismaClient';
 import { ApiException } from '@Common/errors';
-import {
-  BLOCKING_RESERVATION_STATUSES,
-  CommonAreasService,
-} from './common-areas.service.js';
+import { CommonAreasService } from './common-areas.service.js';
+import { BLOCKING_RESERVATION_STATUSES } from '../constants.js';
 import type {
   CommonAreaRepository,
   CommonAreaWithSchedules,
