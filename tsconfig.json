@@ -53,6 +53,8 @@
       "@Paquetes": ["./src/paquetes/index.ts"],
       "@Paquetes/*": ["./src/paquetes/*/index.ts"],
       "@Incidencias/*": ["./src/incidencias/*/index.ts"],
+      "@CommonAreas": ["./src/common-areas/index.ts"],
+      "@CommonAreas/*": ["./src/common-areas/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
       "@Notificaciones/*": ["./src/notificaciones/*/index.ts"]
     }

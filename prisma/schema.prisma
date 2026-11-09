@@ -5,7 +5,8 @@
 // configurado en src/prisma/prisma.service.ts.
 
 generator client {
-  provider = "prisma-client"
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
 
   output = "../src/generated/prisma"
 
@@ -32,12 +33,20 @@ model User {
   refreshTokens RefreshToken[]
   unit          String
 
-  reports Report[]
-
   role Role @default(RESIDENTE)
+
+  reports Report[]
 
   receivedPackages  Package[] @relation("PackageReceivedBy")
   deliveredPackages Package[] @relation("PackageDeliveredBy")
+
+  deletedCommonAreas CommonArea[]       @relation("CommonAreaDeletedBy")
+  commonAreaChanges  CommonAreaChange[]
+  commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
+  reservations       Reservation[]
+
+  comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
+  lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
 
   preferenciasNotificacion PreferenciaNotificacion[]
   notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
@@ -224,4 +233,197 @@ model IntentoEnvio {
   @@unique([notificacionId, numeroIntento])
   @@index([notificacionId])
   @@map("intento_envio")
+}
+
+// ---------------------------------------------------------------------------
+// H6. Áreas comunes
+// Los nombres de tablas y columnas siguen el diseño técnico (DB-6.1).
+// ---------------------------------------------------------------------------
+
+enum CommonAreaStatus {
+  ACTIVA
+  ELIMINADA
+}
+
+model CommonArea {
+  id                 Int              @id @default(autoincrement())
+  name               String           @map("nombre")
+  capacity           Int              @map("capacidad")
+  location           String           @map("ubicacion")
+  /// Duración en horas de cada bloque de reserva.
+  blockDurationHours Int              @map("duracion_bloque_horas")
+  usageConditions    String?          @map("condiciones_uso")
+  status             CommonAreaStatus @default(ACTIVA) @map("estado")
+  createdAt          DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  // Eliminación lógica: quién y cuándo.
+  deletedAt   DateTime? @map("eliminado_en") @db.Timestamptz(6)
+  deletedById String?   @map("eliminado_por") @db.Uuid
+  deletedBy   User?     @relation("CommonAreaDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  schedules    CommonAreaSchedule[]
+  blocks       CommonAreaBlock[]
+  reservations Reservation[]
+  changes      CommonAreaChange[]
+
+  // El nombre es único solo entre áreas ACTIVAS: una eliminada libera su nombre.
+  @@unique([name], map: "area_comun_nombre_activa_key", where: raw("estado = 'ACTIVA'"))
+  @@map("area_comun")
+}
+
+model CommonAreaSchedule {
+  id        Int        @id @default(autoincrement())
+  areaId    Int        @map("area_id")
+  area      CommonArea @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  dayOfWeek Int        @map("dia_semana") @db.SmallInt
+  opensAt   DateTime   @map("hora_apertura") @db.Time(0)
+  closesAt  DateTime   @map("hora_cierre") @db.Time(0)
+
+  // Un horario por día.
+  @@unique([areaId, dayOfWeek])
+  @@map("horario_area")
+}
+
+enum CommonAreaBlockReason {
+  MANTENIMIENTO
+  RENOVACION
+  OTRO
+}
+
+model CommonAreaBlock {
+  id       Int                   @id @default(autoincrement())
+  areaId   Int                   @map("area_id")
+  area     CommonArea            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  startsAt DateTime              @map("inicio") @db.Timestamptz(6)
+  endsAt   DateTime              @map("fin") @db.Timestamptz(6)
+  reason   CommonAreaBlockReason @map("motivo")
+
+  createdAt   DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+  createdById String?  @map("creado_por") @db.Uuid
+  createdBy   User?    @relation("CommonAreaBlockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([areaId, startsAt])
+  @@map("bloqueo_area")
+}
+
+enum CommonAreaChangeField {
+  CAPACIDAD
+  HORARIOS
+  DURACION_BLOQUE
+}
+
+/// Historial de cambios de capacidad, horario y duración de bloque de un área.
+model CommonAreaChange {
+  id            Int                   @id @default(autoincrement())
+  areaId        Int                   @map("area_id")
+  area          CommonArea            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  field         CommonAreaChangeField @map("campo")
+  previousValue Json                  @map("valor_anterior")
+  newValue      Json                  @map("valor_nuevo")
+  changedById   String?               @map("usuario_id") @db.Uuid
+  changedBy     User?                 @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt     DateTime              @default(now()) @map("cambiado_en") @db.Timestamptz(6)
+
+  @@index([areaId])
+  @@map("historial_area")
+}
+
+enum ReservationStatus {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+}
+
+/// Modelo mínimo de reserva: H6 solo lo necesita para bloquear la eliminación
+/// de áreas con reservas futuras. La historia de reservas lo completará.
+model Reservation {
+  id        Int               @id @default(autoincrement())
+  areaId    Int               @map("area_id")
+  // Restrict: las reservas se conservan aunque el área se elimine (lógicamente).
+  area      CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  userId    String            @map("usuario_id") @db.Uuid
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startsAt  DateTime          @map("inicio") @db.Timestamptz(6)
+  endsAt    DateTime          @map("fin") @db.Timestamptz(6)
+  status    ReservationStatus @default(PENDIENTE) @map("estado")
+  createdAt DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  @@index([areaId, startsAt])
+  @@map("reserva")
+}
+
+enum CategoriaComunicado {
+  MANTENIMIENTO
+  SEGURIDAD
+  ADMINISTRATIVO
+}
+
+enum PrioridadComunicado {
+  INFORMATIVO
+  IMPORTANTE
+  URGENTE
+}
+
+enum AudienciaTipo {
+  TODO_EL_CONDOMINIO
+  POR_TORRE
+  POR_SECCION
+}
+
+enum EstadoComunicado {
+  PUBLICADO
+}
+
+// ==========================================
+// MÓDULO 7: ANUNCIOS Y COMUNICADOS (H19 & H20)
+// ==========================================
+
+model ComunicadoOficial {
+  id               Int                 @id @default(autoincrement())
+  titulo           String              @db.VarChar(120)
+  cuerpo           String              @db.VarChar(2000)
+  categoria        CategoriaComunicado
+  prioridad        PrioridadComunicado
+  audienciaTipo    AudienciaTipo       @map("audiencia_tipo")
+  audienciaTarget  String?             @map("audiencia_target") @db.VarChar(50)
+  estado           EstadoComunicado    @default(PUBLICADO)
+  fechaPublicacion DateTime            @default(now()) @map("fecha_publicacion") @db.Timestamptz
+
+  // Llave foránea hacia el Administrador emisor (UUID)
+  emisorId String @map("emisor_id") @db.Uuid
+  emisor   User   @relation("ComunicadosEmitidos", fields: [emisorId], references: [id], onDelete: Restrict)
+
+  // Adjuntos y lecturas
+  adjuntos ComunicadoAdjunto[]
+  lecturas LecturaComunicado[]
+
+  @@map("comunicado_oficial")
+}
+
+model ComunicadoAdjunto {
+  id             Int      @id @default(autoincrement())
+  comunicadoId   Int      @map("comunicado_id")
+  nombreOriginal String   @map("nombre_original") @db.VarChar(255)
+  rutaArchivo    String   @map("ruta_archivo") @db.VarChar(500)
+  tipoMime       String   @map("tipo_mime") @db.VarChar(50)
+  tamanoBytes    Int      @map("tamano_bytes")
+  creadoEn       DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  comunicado ComunicadoOficial @relation(fields: [comunicadoId], references: [id], onDelete: Cascade)
+
+  @@index([comunicadoId])
+  @@map("comunicado_adjunto")
+}
+
+model LecturaComunicado {
+  id           Int      @id @default(autoincrement())
+  comunicadoId Int      @map("comunicado_id")
+  residenteId  String   @map("residente_id") @db.Uuid
+  fechaLectura DateTime @default(now()) @map("fecha_lectura") @db.Timestamptz
+
+  comunicado ComunicadoOficial @relation(fields: [comunicadoId], references: [id], onDelete: Cascade)
+  residente  User              @relation("LecturasResidente", fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@unique([comunicadoId, residenteId])
+  @@map("lectura_comunicado")
 }
