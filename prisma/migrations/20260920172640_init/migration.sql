@@ -33,3 +33,7 @@ CREATE INDEX "refresh_tokens_user_id_idx" ON "refresh_tokens"("user_id");
 
 -- AddForeignKey
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
+ALTER TABLE "intento_envio"
+    ADD CONSTRAINT "intento_envio_numero_chk" CHECK ("numero_intento" BETWEEN 1 AND 3);
