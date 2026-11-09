@@ -48,7 +48,9 @@
       "@Common/*": ["./src/common/*/index.ts"],
       "@Config": ["./src/config/index.ts"],
       "@PrismaClient": ["./src/generated/prisma/client.ts"],
-      "@Incidencias/*": ["./src/incidencias/*/index.ts"]
+      "@Incidencias/*": ["./src/incidencias/*/index.ts"],
+      "@CommonAreas": ["./src/common-areas/index.ts"],
+      "@CommonAreas/*": ["./src/common-areas/*/index.ts"]
     }
   }
 }

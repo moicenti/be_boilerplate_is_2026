@@ -10,6 +10,7 @@ import { validateEnv } from '@Config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { IncidenciasModule } from './incidencias/incidencias.module.js';
+import { CommonAreasModule } from '@CommonAreas';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { IncidenciasModule } from './incidencias/incidencias.module.js';
     UsersModule,
     AuthModule,
     IncidenciasModule,
+    CommonAreasModule,
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',

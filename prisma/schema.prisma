@@ -5,7 +5,8 @@
 // configurado en src/prisma/prisma.service.ts.
 
 generator client {
-  provider = "prisma-client"
+  provider        = "prisma-client"
+  previewFeatures = ["partialIndexes"]
 
   output = "../src/generated/prisma"
 
@@ -30,9 +31,15 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
-  unit         String 
-  
-  reports       Report[]
+  unit          String
+  role          Role           @default(RESIDENTE)
+
+  reports Report[]
+
+  deletedCommonAreas CommonArea[]       @relation("CommonAreaDeletedBy")
+  commonAreaChanges  CommonAreaChange[]
+  commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
+  reservations       Reservation[]
 
   @@map("users")
 }
@@ -53,40 +60,160 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-
-
 model Report {
-  id          String   @id @default(uuid()) @db.Uuid
-  folio       String   @unique
+  id          String @id @default(uuid()) @db.Uuid
+  folio       String @unique
   title       String
   description String
   category    String
   location    String
-  status      String   @default("Abierto")
-  unit       String
-  
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      String @default("Abierto")
+  unit        String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relación con el usuario que crea el reporte
-  userId      String   @map("user_id") @db.Uuid
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Relación con las fotos
-  photos      ReportPhoto[]
+  photos ReportPhoto[]
 
   @@map("reports")
 }
 
 model ReportPhoto {
   id        String   @id @default(uuid()) @db.Uuid
-  url       String   // Ruta o URL del archivo guardado
+  url       String // Ruta o URL del archivo guardado
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relación con el reporte
-  reportId  String   @map("report_id") @db.Uuid
-  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId String @map("report_id") @db.Uuid
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@map("report_photos")
+}
+
+enum Role {
+  ADMINISTRADOR
+  RESIDENTE
+}
+
+// ---------------------------------------------------------------------------
+// H6. Áreas comunes
+// Los nombres de tablas y columnas siguen el diseño técnico (DB-6.1).
+// ---------------------------------------------------------------------------
+
+enum CommonAreaStatus {
+  ACTIVA
+  ELIMINADA
+}
+
+model CommonArea {
+  id                 Int              @id @default(autoincrement())
+  name               String           @map("nombre")
+  capacity           Int              @map("capacidad")
+  location           String           @map("ubicacion")
+  /// Duración en horas de cada bloque de reserva.
+  blockDurationHours Int              @map("duracion_bloque_horas")
+  usageConditions    String?          @map("condiciones_uso")
+  status             CommonAreaStatus @default(ACTIVA) @map("estado")
+  createdAt          DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  // Eliminación lógica: quién y cuándo.
+  deletedAt   DateTime? @map("eliminado_en") @db.Timestamptz(6)
+  deletedById String?   @map("eliminado_por") @db.Uuid
+  deletedBy   User?     @relation("CommonAreaDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  schedules    CommonAreaSchedule[]
+  blocks       CommonAreaBlock[]
+  reservations Reservation[]
+  changes      CommonAreaChange[]
+
+  // El nombre es único solo entre áreas ACTIVAS: una eliminada libera su nombre.
+  @@unique([name], map: "area_comun_nombre_activa_key", where: raw("estado = 'ACTIVA'"))
+  @@map("area_comun")
+}
+
+model CommonAreaSchedule {
+  id        Int        @id @default(autoincrement())
+  areaId    Int        @map("area_id")
+  area      CommonArea @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  dayOfWeek Int        @map("dia_semana") @db.SmallInt
+  opensAt   DateTime   @map("hora_apertura") @db.Time(0)
+  closesAt  DateTime   @map("hora_cierre") @db.Time(0)
+
+  // Un horario por día.
+  @@unique([areaId, dayOfWeek])
+  @@map("horario_area")
+}
+
+enum CommonAreaBlockReason {
+  MANTENIMIENTO
+  RENOVACION
+  OTRO
+}
+
+model CommonAreaBlock {
+  id       Int                   @id @default(autoincrement())
+  areaId   Int                   @map("area_id")
+  area     CommonArea            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  startsAt DateTime              @map("inicio") @db.Timestamptz(6)
+  endsAt   DateTime              @map("fin") @db.Timestamptz(6)
+  reason   CommonAreaBlockReason @map("motivo")
+
+  createdAt   DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+  createdById String?  @map("creado_por") @db.Uuid
+  createdBy   User?    @relation("CommonAreaBlockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([areaId, startsAt])
+  @@map("bloqueo_area")
+}
+
+enum CommonAreaChangeField {
+  CAPACIDAD
+  HORARIOS
+  DURACION_BLOQUE
+}
+
+/// Historial de cambios de capacidad, horario y duración de bloque de un área.
+model CommonAreaChange {
+  id            Int                   @id @default(autoincrement())
+  areaId        Int                   @map("area_id")
+  area          CommonArea            @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  field         CommonAreaChangeField @map("campo")
+  previousValue Json                  @map("valor_anterior")
+  newValue      Json                  @map("valor_nuevo")
+  changedById   String?               @map("usuario_id") @db.Uuid
+  changedBy     User?                 @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt     DateTime              @default(now()) @map("cambiado_en") @db.Timestamptz(6)
+
+  @@index([areaId])
+  @@map("historial_area")
+}
+
+enum ReservationStatus {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+}
+
+/// Modelo mínimo de reserva: H6 solo lo necesita para bloquear la eliminación
+/// de áreas con reservas futuras. La historia de reservas lo completará.
+model Reservation {
+  id        Int               @id @default(autoincrement())
+  areaId    Int               @map("area_id")
+  // Restrict: las reservas se conservan aunque el área se elimine (lógicamente).
+  area      CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  userId    String            @map("usuario_id") @db.Uuid
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startsAt  DateTime          @map("inicio") @db.Timestamptz(6)
+  endsAt    DateTime          @map("fin") @db.Timestamptz(6)
+  status    ReservationStatus @default(PENDIENTE) @map("estado")
+  createdAt DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  @@index([areaId, startsAt])
+  @@map("reserva")
 }
