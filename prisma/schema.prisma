@@ -41,6 +41,9 @@ model User {
   commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
 
+  comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
+  lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
+
   @@map("users")
 }
 
@@ -99,6 +102,7 @@ model ReportPhoto {
 enum Role {
   ADMINISTRADOR
   RESIDENTE
+  SEGURIDAD
 }
 
 // ---------------------------------------------------------------------------
@@ -216,4 +220,80 @@ model Reservation {
 
   @@index([areaId, startsAt])
   @@map("reserva")
+}
+
+enum CategoriaComunicado {
+  MANTENIMIENTO
+  SEGURIDAD
+  ADMINISTRATIVO
+}
+
+enum PrioridadComunicado {
+  INFORMATIVO
+  IMPORTANTE
+  URGENTE
+}
+
+enum AudienciaTipo {
+  TODO_EL_CONDOMINIO
+  POR_TORRE
+  POR_SECCION
+}
+
+enum EstadoComunicado {
+  PUBLICADO
+}
+
+// ==========================================
+// MÓDULO 7: ANUNCIOS Y COMUNICADOS (H19 & H20)
+// ==========================================
+
+model ComunicadoOficial {
+  id               Int                 @id @default(autoincrement())
+  titulo           String              @db.VarChar(120)
+  cuerpo           String              @db.VarChar(2000)
+  categoria        CategoriaComunicado
+  prioridad        PrioridadComunicado
+  audienciaTipo    AudienciaTipo       @map("audiencia_tipo")
+  audienciaTarget  String?             @map("audiencia_target") @db.VarChar(50)
+  estado           EstadoComunicado    @default(PUBLICADO)
+  fechaPublicacion DateTime            @default(now()) @map("fecha_publicacion") @db.Timestamptz
+
+  // Llave foránea hacia el Administrador emisor (UUID)
+  emisorId String @map("emisor_id") @db.Uuid
+  emisor   User   @relation("ComunicadosEmitidos", fields: [emisorId], references: [id], onDelete: Restrict)
+
+  // Adjuntos y lecturas
+  adjuntos ComunicadoAdjunto[]
+  lecturas LecturaComunicado[]
+
+  @@map("comunicado_oficial")
+}
+
+model ComunicadoAdjunto {
+  id             Int      @id @default(autoincrement())
+  comunicadoId   Int      @map("comunicado_id")
+  nombreOriginal String   @map("nombre_original") @db.VarChar(255)
+  rutaArchivo    String   @map("ruta_archivo") @db.VarChar(500)
+  tipoMime       String   @map("tipo_mime") @db.VarChar(50)
+  tamanoBytes    Int      @map("tamano_bytes")
+  creadoEn       DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  comunicado ComunicadoOficial @relation(fields: [comunicadoId], references: [id], onDelete: Cascade)
+
+  @@index([comunicadoId])
+  @@map("comunicado_adjunto")
+}
+
+model LecturaComunicado {
+  id           Int      @id @default(autoincrement())
+  comunicadoId Int      @map("comunicado_id")
+  residenteId  String   @map("residente_id") @db.Uuid
+  fechaLectura DateTime @default(now()) @map("fecha_lectura") @db.Timestamptz
+
+  comunicado ComunicadoOficial @relation(fields: [comunicadoId], references: [id], onDelete: Cascade)
+  residente  User              @relation("LecturasResidente", fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@unique([comunicadoId, residenteId])
+  @@map("lectura_comunicado")
 }

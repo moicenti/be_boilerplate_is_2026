@@ -1,0 +1,1 @@
+export * from './comunicados.service.js';

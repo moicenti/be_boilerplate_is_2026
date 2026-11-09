@@ -11,6 +11,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { IncidenciasModule } from './incidencias/incidencias.module.js';
 import { CommonAreasModule } from '@CommonAreas';
+import { AnunciosModule } from './anuncio/index.js';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CommonAreasModule } from '@CommonAreas';
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
     }),
+    AnunciosModule,
   ],
   providers: [
     {
