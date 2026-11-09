@@ -1,21 +1,8 @@
-/*
-  Warnings:
-
-  - Added the required column `unit` to the `users` table without a default value. This is not possible if the table is not empty.
-
-*/
--- CreateEnum
-CREATE TYPE "Role" AS ENUM ('RESIDENTE', 'ADMINISTRADOR', 'SEGURIDAD');
-
 -- CreateEnum
 CREATE TYPE "PackageStatus" AS ENUM ('PENDIENTE_RETIRO', 'ENTREGADO');
 
 -- CreateEnum
 CREATE TYPE "EstadoNotificacion" AS ENUM ('PENDIENTE', 'ENVIADA', 'FALLIDO', 'FALLIDO_PERMANENTE');
-
--- AlterTable
-ALTER TABLE "users" ADD COLUMN     "role" "Role" NOT NULL DEFAULT 'RESIDENTE',
-ADD COLUMN     "unit" TEXT NOT NULL;
 
 -- CreateTable
 CREATE TABLE "units" (
@@ -49,33 +36,6 @@ CREATE TABLE "packages" (
     "reminder_sent_at" TIMESTAMP(3),
 
     CONSTRAINT "packages_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "reports" (
-    "id" UUID NOT NULL,
-    "folio" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "description" TEXT NOT NULL,
-    "category" TEXT NOT NULL,
-    "location" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'Abierto',
-    "unit" TEXT NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
-    "user_id" UUID NOT NULL,
-
-    CONSTRAINT "reports_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "report_photos" (
-    "id" UUID NOT NULL,
-    "url" TEXT NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "report_id" UUID NOT NULL,
-
-    CONSTRAINT "report_photos_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -145,12 +105,6 @@ CREATE INDEX "packages_status_received_at_idx" ON "packages"("status", "received
 CREATE INDEX "packages_unit_id_idx" ON "packages"("unit_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "reports_folio_key" ON "reports"("folio");
-
--- CreateIndex
-CREATE INDEX "report_photos_report_id_idx" ON "report_photos"("report_id");
-
--- CreateIndex
 CREATE UNIQUE INDEX "preferencia_notificacion_residente_id_modulo_origen_key" ON "preferencia_notificacion"("residente_id", "modulo_origen");
 
 -- CreateIndex
@@ -173,12 +127,6 @@ ALTER TABLE "packages" ADD CONSTRAINT "packages_received_by_id_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "packages" ADD CONSTRAINT "packages_delivered_by_id_fkey" FOREIGN KEY ("delivered_by_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "reports" ADD CONSTRAINT "reports_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "report_photos" ADD CONSTRAINT "report_photos_report_id_fkey" FOREIGN KEY ("report_id") REFERENCES "reports"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "preferencia_notificacion" ADD CONSTRAINT "preferencia_notificacion_residente_id_fkey" FOREIGN KEY ("residente_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
