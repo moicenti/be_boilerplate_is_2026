@@ -32,9 +32,13 @@ model User {
 
   refreshTokens RefreshToken[]
   unit          String
-  role          Role           @default(RESIDENTE)
+
+  role Role @default(RESIDENTE)
 
   reports Report[]
+
+  receivedPackages  Package[] @relation("PackageReceivedBy")
+  deliveredPackages Package[] @relation("PackageDeliveredBy")
 
   deletedCommonAreas CommonArea[]       @relation("CommonAreaDeletedBy")
   commonAreaChanges  CommonAreaChange[]
@@ -44,7 +48,66 @@ model User {
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
 
+  preferenciasNotificacion PreferenciaNotificacion[]
+  notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
+  lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
+
   @@map("users")
+}
+
+enum Role {
+  RESIDENTE
+  ADMINISTRADOR
+  SEGURIDAD
+}
+
+model Unit {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  tower       String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  packages       Package[]
+  notificaciones Notificacion[]
+
+  @@map("units")
+}
+
+enum PackageStatus {
+  PENDIENTE_RETIRO
+  ENTREGADO
+}
+
+model Package {
+  id                String        @id @default(uuid()) @db.Uuid
+  number            Int           @unique @default(autoincrement())
+  folio             String        @unique
+  recipientName     String        @map("recipient_name")
+  carrier           String
+  trackingReference String        @map("tracking_reference")
+  description       String
+  notes             String?
+  pickupCode        String        @map("pickup_code") @db.Char(6)
+  status            PackageStatus @default(PENDIENTE_RETIRO)
+
+  unitId String @map("unit_id") @db.Uuid
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  receivedById String   @map("received_by_id") @db.Uuid
+  receivedBy   User     @relation("PackageReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  deliveredTo   String?   @map("delivered_to")
+  deliveredById String?   @map("delivered_by_id") @db.Uuid
+  deliveredBy   User?     @relation("PackageDeliveredBy", fields: [deliveredById], references: [id], onDelete: Restrict)
+  deliveredAt   DateTime? @map("delivered_at")
+
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  @@index([status, receivedAt])
+  @@index([unitId])
+  @@map("packages")
 }
 
 model RefreshToken {
@@ -99,10 +162,77 @@ model ReportPhoto {
   @@map("report_photos")
 }
 
-enum Role {
-  ADMINISTRADOR
-  RESIDENTE
-  SEGURIDAD
+// ───────────── H23: notificaciones ─────────────
+
+enum EstadoNotificacion {
+  PENDIENTE
+  ENVIADA
+  FALLIDO
+  FALLIDO_PERMANENTE
+}
+
+model PreferenciaNotificacion {
+  id           Int     @id @default(autoincrement())
+  residenteId  String  @map("residente_id") @db.Uuid
+  moduloOrigen String  @map("modulo_origen")
+  activo       Boolean @default(true)
+
+  residente User @relation(fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@unique([residenteId, moduloOrigen])
+  @@map("preferencia_notificacion")
+}
+
+model LoteNotificacion {
+  id            Int      @id @default(autoincrement())
+  moduloOrigen  String   @map("modulo_origen")
+  emitidoPorId  String?  @map("emitido_por") @db.Uuid
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion") @db.Timestamptz
+
+  emitidoPor     User?          @relation("LotesEmitidos", fields: [emitidoPorId], references: [id])
+  notificaciones Notificacion[]
+
+  @@map("lote_notificacion")
+}
+
+model Notificacion {
+  id            Int                @id @default(autoincrement())
+  loteId        Int                @map("lote_id")
+  residenteId   String             @map("residente_id") @db.Uuid
+  unidadId      String?            @map("unidad_id") @db.Uuid
+  tipo          String
+  titulo        String
+  mensaje       String
+  moduloOrigen  String             @map("modulo_origen")
+  enlaceAccion  String?            @map("enlace_accion")
+  leida         Boolean            @default(false)
+  fechaLectura  DateTime?          @map("fecha_lectura") @db.Timestamptz
+  forzada       Boolean            @default(false)
+  estado        EstadoNotificacion @default(PENDIENTE)
+  fechaCreacion DateTime           @default(now()) @map("fecha_creacion") @db.Timestamptz
+
+  lote      LoteNotificacion @relation(fields: [loteId], references: [id])
+  residente User             @relation("NotificacionesRecibidas", fields: [residenteId], references: [id])
+  unidad    Unit?            @relation(fields: [unidadId], references: [id])
+  intentos  IntentoEnvio[]
+
+  @@index([estado])
+  @@index([residenteId])
+  @@map("notificacion")
+}
+
+model IntentoEnvio {
+  id             Int      @id @default(autoincrement())
+  notificacionId Int      @map("notificacion_id")
+  numeroIntento  Int      @map("numero_intento")
+  motivoFallo    String?  @map("motivo_fallo")
+  fechaIntento   DateTime @default(now()) @map("fecha_intento") @db.Timestamptz
+
+  notificacion Notificacion @relation(fields: [notificacionId], references: [id], onDelete: Cascade)
+
+  @@unique([notificacionId, numeroIntento])
+  @@index([notificacionId])
+  @@map("intento_envio")
 }
 
 // ---------------------------------------------------------------------------
