@@ -10,7 +10,6 @@ import {
   Post,
   Put,
   UseFilters,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -28,7 +27,6 @@ import {
 } from '@nestjs/swagger';
 import { Role, type User } from '@PrismaClient';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { RolesGuard } from '@Auth/guards';
 import { ApiException } from '@Common/errors';
 import { ApiExceptionFilter } from '@Common/filters';
 import { CommonAreasService } from '../services/index.js';
@@ -47,7 +45,6 @@ const ParseAreaIdPipe = new ParseIntPipe({
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'NO_AUTENTICADO: sin sesión o token vencido.' })
 @UseFilters(ApiExceptionFilter)
-@UseGuards(RolesGuard)
 @Controller('areas')
 export class CommonAreasController {
   constructor(private readonly commonAreasService: CommonAreasService) {}
