@@ -48,6 +48,11 @@
       "@Common/*": ["./src/common/*/index.ts"],
       "@Config": ["./src/config/index.ts"],
       "@PrismaClient": ["./src/generated/prisma/client.ts"],
+      "@Unidades": ["./src/unidades/index.ts"],
+      "@Unidades/*": ["./src/unidades/*/index.ts"],
+      "@Paquetes": ["./src/paquetes/index.ts"],
+      "@Paquetes/*": ["./src/paquetes/*/index.ts"],
+      "@Incidencias/*": ["./src/incidencias/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
       "@Notificaciones/*": ["./src/notificaciones/*/index.ts"]
     }

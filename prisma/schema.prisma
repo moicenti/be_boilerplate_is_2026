@@ -7,20 +7,11 @@
 generator client {
   provider = "prisma-client"
 
-  // `prisma-client-js` está deprecado. El generador nuevo exige un `output`
-  // explícito y genera dentro del proyecto en vez de node_modules.
-  // Tiene que caer dentro de src/ porque tsconfig.build.json compila
-  // únicamente ese directorio (rootDir: ./src, include: ["src"]).
   output = "../src/generated/prisma"
 
-  // Query compiler en WASM: sin binario nativo de Rust, lo que permite usar
-  // imágenes Alpine sin instalar libssl.
   engineType = "client"
   runtime    = "nodejs"
 
-  // El proyecto es ESM puro ("type": "module" + moduleResolution nodenext),
-  // así que el cliente se genera como ESM y sus imports relativos llevan la
-  // extensión .js que tsc espera al emitir.
   moduleFormat           = "esm"
   generatedFileExtension = "ts"
   importFileExtension    = "js"
@@ -39,15 +30,80 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+  unit          String
+
+  reports Report[]
+
+  role Role @default(RESIDENTE)
+
+  receivedPackages  Package[] @relation("PackageReceivedBy")
+  deliveredPackages Package[] @relation("PackageDeliveredBy")
+
+  preferenciasNotificacion PreferenciaNotificacion[]
+  notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
+  lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
 
   @@map("users")
+}
+
+enum Role {
+  RESIDENTE
+  ADMINISTRADOR
+  SEGURIDAD
+}
+
+model Unit {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  tower       String
+  description String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  packages       Package[]
+  notificaciones Notificacion[]
+
+  @@map("units")
+}
+
+enum PackageStatus {
+  PENDIENTE_RETIRO
+  ENTREGADO
+}
+
+model Package {
+  id                String        @id @default(uuid()) @db.Uuid
+  number            Int           @unique @default(autoincrement())
+  folio             String        @unique
+  recipientName     String        @map("recipient_name")
+  carrier           String
+  trackingReference String        @map("tracking_reference")
+  description       String
+  notes             String?
+  pickupCode        String        @map("pickup_code") @db.Char(6)
+  status            PackageStatus @default(PENDIENTE_RETIRO)
+
+  unitId String @map("unit_id") @db.Uuid
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  receivedById String   @map("received_by_id") @db.Uuid
+  receivedBy   User     @relation("PackageReceivedBy", fields: [receivedById], references: [id], onDelete: Restrict)
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  deliveredTo   String?   @map("delivered_to")
+  deliveredById String?   @map("delivered_by_id") @db.Uuid
+  deliveredBy   User?     @relation("PackageDeliveredBy", fields: [deliveredById], references: [id], onDelete: Restrict)
+  deliveredAt   DateTime? @map("delivered_at")
+
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  @@index([status, receivedAt])
+  @@index([unitId])
+  @@map("packages")
 }
 
 model RefreshToken {
   id String @id @default(uuid()) @db.Uuid
 
-  // Se guarda el SHA-256 del token, nunca el token en claro: si se filtra la
-  // base, los refresh tokens emitidos no son utilizables.
   tokenHash String @unique @map("token_hash")
 
   userId String @map("user_id") @db.Uuid
@@ -60,6 +116,44 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+model Report {
+  id          String @id @default(uuid()) @db.Uuid
+  folio       String @unique
+  title       String
+  description String
+  category    String
+  location    String
+  status      String @default("Abierto")
+  unit        String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relación con el usuario que crea el reporte
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relación con las fotos
+  photos ReportPhoto[]
+
+  @@map("reports")
+}
+
+model ReportPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String // Ruta o URL del archivo guardado
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relación con el reporte
+  reportId String @map("report_id") @db.Uuid
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_photos")
+}
+
+// ───────────── H23: notificaciones ─────────────
 
 enum EstadoNotificacion {
   PENDIENTE
@@ -96,7 +190,7 @@ model Notificacion {
   id            Int                @id @default(autoincrement())
   loteId        Int                @map("lote_id")
   residenteId   String             @map("residente_id") @db.Uuid
-  unidadId      Int?               @map("unidad_id")
+  unidadId      String?            @map("unidad_id") @db.Uuid
   tipo          String
   titulo        String
   mensaje       String

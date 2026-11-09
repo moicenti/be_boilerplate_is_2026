@@ -15,7 +15,8 @@ import {
 } from '@Notificaciones/repositories';
 import { EnvioService } from './envio.service.js';
 
-const ROL_ADMINISTRADOR = 'ADMINISTRADOR'; // AJUSTAR al valor real de tu enum Role
+const ROL_ADMINISTRADOR = 'ADMINISTRADOR'; // valor del enum Role de H13
+const TIPOS_DESTINATARIO = ['RESIDENTE', 'UNIDAD', 'GRUPO'];
 
 @Injectable()
 export class NotificacionesService {
@@ -25,6 +26,10 @@ export class NotificacionesService {
     private readonly envio: EnvioService,
   ) {}
 
+  /**
+   * Convierte un aviso en una notificación por residente.
+   * `emisor` es quien lo emite (lo pasa el módulo que llama, desde la sesión).
+   */
   async emitir(
     dto: EmitirNotificacionDto,
     emisor?: Emisor,
@@ -47,6 +52,7 @@ export class NotificacionesService {
       });
     }
 
+    // Forzada ignora las preferencias. Sin registro de preferencia se asume activo.
     const apagados = forzada
       ? new Set<string>()
       : await this.destinatarios.desactivados(
@@ -61,7 +67,7 @@ export class NotificacionesService {
       { moduloOrigen: dto.moduloOrigen, emitidoPorId: emisor?.id ?? null },
       {
         tipo: dto.tipo,
-        titulo: dto.titulo ?? dto.tipo,
+        titulo: dto.titulo?.trim() || dto.tipo,
         mensaje: dto.mensaje,
         moduloOrigen: dto.moduloOrigen,
         enlaceAccion: dto.enlaceAccion ?? null,
@@ -70,7 +76,7 @@ export class NotificacionesService {
       destinos,
     );
 
-    // Primer intento inmediato; si falla, lo retoma el cron. No afecta la respuesta.
+    // Primer intento inmediato. Si falla, lo retoma la tarea programada.
     for (const n of await this.notificaciones.porLote(loteId)) {
       await this.envio.procesar(n);
     }
@@ -83,24 +89,20 @@ export class NotificacionesService {
   }
 
   private validar(dto: EmitirNotificacionDto): void {
-    const falta = (campo: string, msg: string) =>
-      new BadRequestException({
-        codigo: 'SOLICITUD_INVALIDA',
-        mensaje: msg,
-        campo,
-      });
+    const invalida = (mensaje: string) =>
+      new BadRequestException({ codigo: 'SOLICITUD_INVALIDA', mensaje });
 
-    if (
-      !dto?.destinatario?.tipo ||
-      dto.destinatario.id === undefined ||
-      dto.destinatario.id === ''
-    ) {
-      throw falta('destinatario', 'El destinatario es obligatorio');
+    const d = dto?.destinatario;
+    if (!d || !d.tipo || d.id === undefined || d.id === null || d.id === '') {
+      throw invalida('El destinatario es obligatorio');
     }
-    if (!dto.tipo?.trim()) throw falta('tipo', 'El tipo es obligatorio');
-    if (!dto.mensaje?.trim())
-      throw falta('mensaje', 'El mensaje es obligatorio');
-    if (!dto.moduloOrigen?.trim())
-      throw falta('moduloOrigen', 'El módulo de origen es obligatorio');
+    if (!TIPOS_DESTINATARIO.includes(d.tipo)) {
+      throw invalida('El tipo de destinatario debe ser RESIDENTE, UNIDAD o GRUPO');
+    }
+    if (!dto.tipo?.trim()) throw invalida('El tipo es obligatorio');
+    if (!dto.mensaje?.trim()) throw invalida('El mensaje es obligatorio');
+    if (!dto.moduloOrigen?.trim()) {
+      throw invalida('El módulo de origen es obligatorio');
+    }
   }
 }

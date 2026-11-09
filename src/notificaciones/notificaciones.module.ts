@@ -17,7 +17,7 @@ import {
     NotificacionRepository,
     DestinatariosRepository,
   ],
-  // Se exporta solo el servicio: los módulos 1, 5, 6 y 7 no conocen la base.
+  // Solo se exporta el servicio: los módulos 1, 5, 6 y 7 no conocen la base.
   exports: [NotificacionesService],
 })
 export class NotificacionesModule {}

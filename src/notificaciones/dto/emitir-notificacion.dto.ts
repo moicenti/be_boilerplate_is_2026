@@ -2,7 +2,8 @@ export type TipoDestinatario = 'RESIDENTE' | 'UNIDAD' | 'GRUPO';
 
 export interface DestinatarioDto {
   tipo: TipoDestinatario;
-  id: string | number;
+  /** residente: uuid del usuario · unidad: uuid de la unidad · grupo: nombre de la torre */
+  id: string;
 }
 
 export interface EmitirNotificacionDto {
@@ -15,6 +16,7 @@ export interface EmitirNotificacionDto {
   forzada?: boolean;
 }
 
+/** Quién emite. Sale de la sesión del módulo que llama, nunca del cuerpo de una petición. */
 export interface Emisor {
   id: string;
   rol: string;
