@@ -300,6 +300,7 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
 | `GET` | `/auth/me` | Bearer | `200` | Usuario autenticado |
 | `GET` | `/areas` | Bearer | `200` | Lista las áreas comunes activas con sus horarios (H6) |
+| `GET` | `/areas/disponibilidad?fecha=AAAA-MM-DD&hora=HH:mm&duracionMin=60&areaId=` | Bearer | `200` | Disponibilidad de las áreas activas en un intervalo (hora local del condominio). Motivos: `FUERA_DE_HORARIO`, `BLOQUEADA`, `RESERVADA` (solo reservas confirmadas). `400` si la fecha ya pasó, `404` si `areaId` no existe (H4) |
 | `GET` | `/areas/{id}` | Bearer | `200` | Consulta un área común activa (H6) |
 | `POST` | `/areas` | Bearer · `ADMINISTRADOR` | `201` | Crea un área común: nombre, capacidad, ubicación, duración de bloque (horas), condiciones de uso (opcional) y horarios (H6) |
 | `PUT` | `/areas/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza todos los datos del área y sus horarios; registra en el historial los cambios de capacidad, duración de bloque y horario (H6) |
