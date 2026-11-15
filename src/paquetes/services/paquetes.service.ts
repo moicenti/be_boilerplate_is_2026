@@ -15,8 +15,9 @@ import type {
   CreatePackageDto,
   DeliverPackageDto,
   ListPackagesQueryDto,
+  MyPackagesQueryDto,
 } from '@Paquetes/dto';
-import { PackageStatus, type User } from '@PrismaClient';
+import { PackageStatus, Role, type User } from '@PrismaClient';
 
 const PICKUP_CODE_LENGTH = 6;
 const PAGE_SIZE = 20;
@@ -29,6 +30,15 @@ export interface PackagePage extends PendingSummary {
   total: number;
   totalPages: number;
   carriers: string[];
+}
+
+export interface MyPackagePage {
+  items: PackageWithRelations[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  pendingCount: number;
 }
 
 @Injectable()
@@ -95,8 +105,53 @@ export class PaquetesService {
     return updated;
   }
 
-  findOne(id: string): Promise<PackageWithRelations> {
-    return this.findOrFail(id);
+  async findOne(id: string, user: User): Promise<PackageWithRelations> {
+    const pkg = await this.findOrFail(id);
+    if (user.role === Role.RESIDENTE && !this.belongsToUnitOf(pkg, user)) {
+      throw new NotFoundException('El paquete no existe.');
+    }
+    return pkg;
+  }
+
+  canSeePickupCode(pkg: PackageWithRelations, user: User): boolean {
+    return (
+      user.role === Role.RESIDENTE &&
+      this.belongsToUnitOf(pkg, user) &&
+      pkg.status === PackageStatus.PENDIENTE_RETIRO
+    );
+  }
+
+  async listForResident(
+    user: User,
+    query: MyPackagesQueryDto,
+  ): Promise<MyPackagePage> {
+    const empty: MyPackagePage = {
+      items: [],
+      page: query.page,
+      pageSize: PAGE_SIZE,
+      total: 0,
+      totalPages: 1,
+      pendingCount: 0,
+    };
+    if (!user.unit) return empty;
+
+    const [{ items, total }, pendingCount] = await Promise.all([
+      this.packageRepository.findPageForUnit(
+        user.unit,
+        query.estado,
+        (query.page - 1) * PAGE_SIZE,
+        PAGE_SIZE,
+      ),
+      this.packageRepository.countPendingForUnit(user.unit),
+    ]);
+
+    return {
+      ...empty,
+      items,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+      pendingCount,
+    };
   }
 
   async list(query: ListPackagesQueryDto): Promise<PackagePage> {
@@ -136,6 +191,10 @@ export class PaquetesService {
       PICKUP_CODE_LENGTH,
       '0',
     );
+  }
+
+  private belongsToUnitOf(pkg: PackageWithRelations, user: User): boolean {
+    return Boolean(user.unit) && pkg.unit.code === user.unit;
   }
 
   private async findOrFail(id: string): Promise<PackageWithRelations> {

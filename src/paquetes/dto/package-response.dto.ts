@@ -64,8 +64,19 @@ export class PackageResponseDto {
   @ApiPropertyOptional({ type: PackageStaffDto, nullable: true })
   deliveredBy!: PackageStaffDto | null;
 
-  static fromEntity(pkg: PackageWithRelations): PackageResponseDto {
+  @ApiPropertyOptional({
+    example: '482913',
+    description:
+      'Solo para residentes de la unidad y mientras el paquete está pendiente.',
+  })
+  pickupCode?: string;
+
+  static fromEntity(
+    pkg: PackageWithRelations,
+    options: { includePickupCode?: boolean } = {},
+  ): PackageResponseDto {
     return {
+      ...(options.includePickupCode ? { pickupCode: pkg.pickupCode } : {}),
       id: pkg.id,
       folio: pkg.folio,
       status: pkg.status,
