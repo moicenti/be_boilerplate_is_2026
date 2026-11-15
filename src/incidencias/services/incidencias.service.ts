@@ -15,7 +15,7 @@ import {
 import type { Unit } from '@PrismaClient';
 
 const UNIT_REGEX = /^[A-Z]+-(?:[1-9]\d*)$/;
-const ASSIGNABLE_STATUSES = ['Abierto', 'En atención'];
+const ASSIGNABLE_STATUSES = ['Abierto', 'En atención', 'Rechazado'];
 const RESOLVABLE_STATUSES = ['En atención'];
 
 @Injectable()
@@ -103,8 +103,10 @@ export class IncidenciasService {
       );
     }
 
-    const newStatus = report.status === 'Abierto' ? 'En atención' : report.status;
-
+const newStatus = ['Abierto', 'Rechazado'].includes(report.status)
+  ? 'En atención'
+  : report.status;
+  
     return this.incidenciaRepository.assign(reportId, {
       priority: dto.priority,
       assigneeId: dto.assigneeId,
