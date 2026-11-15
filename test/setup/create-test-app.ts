@@ -18,6 +18,16 @@ export const USERS = {
     role: Role.RESIDENTE,
     unit: 'A-304',
   },
+  residenteMismaUnidad: {
+    email: 'residente2@test.com',
+    role: Role.RESIDENTE,
+    unit: 'A-304',
+  },
+  vecino: {
+    email: 'vecino@test.com',
+    role: Role.RESIDENTE,
+    unit: 'B-103',
+  },
 } as const;
 
 export type TestUser = keyof typeof USERS;
