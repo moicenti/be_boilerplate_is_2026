@@ -164,4 +164,52 @@ export class IncidenciasService {
   async findMaintenanceUsers() {
     return this.incidenciaRepository.findMaintenanceUsers();
   }
+
+  async confirmResolution(reportId: string, userId: string) {
+  const report = await this.incidenciaRepository.findById(reportId);
+  if (!report) throw new NotFoundException('Reporte no encontrado');
+
+  // Solo el dueño puede confirmar
+  if (report.userId !== userId) {
+    throw new ForbiddenException(
+      'Solo el dueño del reporte puede confirmar la resolución',
+    );
+  }
+
+  // Solo se puede confirmar si está en estado "Resuelto"
+  if (report.status !== 'Resuelto') {
+    throw new BadRequestException(
+      `Solo se pueden confirmar reportes en estado "Resuelto". Estado actual: "${report.status}".`,
+    );
+  }
+
+  return this.incidenciaRepository.confirmResolution(reportId, userId);
+}
+
+async rejectResolution(reportId: string, userId: string, comment: string) {
+  const report = await this.incidenciaRepository.findById(reportId);
+  if (!report) throw new NotFoundException('Reporte no encontrado');
+
+  if (report.userId !== userId) {
+    throw new ForbiddenException(
+      'Solo el dueño del reporte puede rechazar la resolución',
+    );
+  }
+
+  if (report.status !== 'Resuelto') {
+    throw new BadRequestException(
+      `Solo se pueden rechazar reportes en estado "Resuelto". Estado actual: "${report.status}".`,
+    );
+  }
+
+  const trimmed = comment?.trim() ?? '';
+  if (trimmed.length < 10 || trimmed.length > 200) {
+    throw new BadRequestException(
+      'El comentario de rechazo es obligatorio (10-200 caracteres)',
+    );
+  }
+
+  return this.incidenciaRepository.rejectResolution(reportId, userId, trimmed);
+}
+
 }
