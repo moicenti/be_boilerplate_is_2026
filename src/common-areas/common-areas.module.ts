@@ -21,5 +21,6 @@ import {
     CommonAreaBlockRepository,
     CommonAreaAvailabilityRepository,
   ],
+  exports: [CommonAreasService],
 })
 export class CommonAreasModule {}

@@ -1,4 +1,4 @@
-import { dayOfWeekOf, zonedDateTimeToInstant } from './time.js';
+import { dayOfWeekOf, toZonedIso, zonedDateTimeToInstant } from './time.js';
 
 describe('zonedDateTimeToInstant', () => {
   it('convierte hora local de El Salvador (UTC-6) a UTC', () => {
@@ -26,5 +26,17 @@ describe('dayOfWeekOf', () => {
   it('devuelve 0 para domingo y 6 para sábado', () => {
     expect(dayOfWeekOf('2026-11-15')).toBe(0);
     expect(dayOfWeekOf('2026-11-14')).toBe(6);
+  });
+});
+
+describe('toZonedIso', () => {
+  it('formatea el instante en hora local con su desfase', () => {
+    expect(toZonedIso(new Date('2026-11-13T00:00:00Z'), 'America/El_Salvador')).toBe(
+      '2026-11-12T18:00:00-06:00',
+    );
+  });
+
+  it('usa +00:00 en UTC', () => {
+    expect(toZonedIso(new Date('2026-11-13T00:30:15Z'), 'UTC')).toBe('2026-11-13T00:30:15+00:00');
   });
 });

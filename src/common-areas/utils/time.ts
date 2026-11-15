@@ -74,3 +74,14 @@ export function zonedDateTimeToInstant(date: string, time: string, timeZone: str
   const firstGuess = wallClock - offsetMs(new Date(wallClock), timeZone);
   return new Date(wallClock - offsetMs(new Date(firstGuess), timeZone));
 }
+
+/** Instante en ISO 8601 con el desfase local: "2026-11-12T18:00:00-06:00". */
+export function toZonedIso(instant: Date, timeZone: string): string {
+  const { date, secondsOfDay } = toZonedParts(instant, timeZone);
+  const offsetMin = Math.round(offsetMs(instant, timeZone) / 60_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const time = `${pad(Math.floor(secondsOfDay / 3600))}:${pad(Math.floor(secondsOfDay / 60) % 60)}:${pad(secondsOfDay % 60)}`;
+  const sign = offsetMin < 0 ? '-' : '+';
+  const abs = Math.abs(offsetMin);
+  return `${date}T${time}${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}

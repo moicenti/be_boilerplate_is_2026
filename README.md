@@ -308,6 +308,9 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `GET` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `200` | Lista los bloqueos de un área |
 | `POST` | `/areas/{id}/bloqueos` | Bearer · `ADMINISTRADOR` | `201` | Bloquea un horario: mismo día, dentro del horario del área, sin superponerse con otros bloqueos ni con reservas pendientes o confirmadas |
 | `DELETE` | `/areas/{id}/bloqueos/{bloqueoId}` | Bearer · `ADMINISTRADOR` | `204` | Elimina un bloqueo que aún no terminó |
+| `POST` | `/reservas` | Bearer · `RESIDENTE` | `201` | Reserva un área para la unidad de la sesión. `400` datos inválidos, `404` `AREA_INEXISTENTE`, `409` `RESERVA_CRUZADA` (restricción de exclusión en la BD), `422` `FUERA_DE_HORARIO` (horario, bloqueo o fecha pasada) (H5) |
+| `GET` | `/reservas` | Bearer · `RESIDENTE` | `200` | Reservas de la unidad de la sesión, de la más reciente a la más antigua (H5) |
+| `PATCH` | `/reservas/{id}/cancelar` | Bearer · `RESIDENTE` | `200` | Cancela una reserva confirmada de la unidad que aún no termina; `403` `RECURSO_AJENO`, `409` `TRANSICION_INVALIDA` (H5) |
 
 Los endpoints de áreas responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 
