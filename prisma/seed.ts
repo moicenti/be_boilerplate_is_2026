@@ -34,30 +34,7 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
-  // `upsert` hace el seed idempotente: se puede correr las veces que haga falta.
-  const user = await prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
-    update: {},
-    create: { email: DEMO_EMAIL, passwordHash, unit: "A-19" },
-  });
-
-  console.log(`Usuario demo listo: ${user.email} / ${DEMO_PASSWORD}`);
-   const user2 = await prisma.user.upsert({
-    where: { email: "otro@example.com" },
-    update: {},
-    create: { email: "otro@example.com", passwordHash, unit: "A-20" },
-  });
-
-  console.log(`Usuario demo listo: ${user2.email} / ${DEMO_PASSWORD}`);
-
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@example.com" },
-    update: { role: "ADMINISTRADOR" },
-    create: { email: "admin@example.com", passwordHash, unit: "ADMIN", role: "ADMINISTRADOR" },
-  });
-
-  console.log(`Administrador demo listo: ${admin.email} / ${DEMO_PASSWORD}`);
-
+  // 1. Crear unidades primero
   for (const unit of UNITS) {
     await prisma.unit.upsert({
       where: { code: unit.code },
@@ -67,15 +44,66 @@ async function main() {
   }
   console.log(`Unidades listas: ${UNITS.length}`);
 
+  // 2. Lookup de unitIds por código
+  const unitByCode = new Map(
+    (await prisma.unit.findMany({ select: { id: true, code: true } })).map(
+      (u) => [u.code, u.id],
+    ),
+  );
+
+  // 3. Usuario demo (A-19)
+  const user = await prisma.user.upsert({
+    where: { email: DEMO_EMAIL },
+    update: { unitId: unitByCode.get('A-19') ?? null },
+    create: {
+      email: DEMO_EMAIL,
+      passwordHash,
+      unitId: unitByCode.get('A-19') ?? null,
+    },
+  });
+  console.log(`Usuario demo listo: ${user.email} / ${DEMO_PASSWORD}`);
+
+  // 4. Otro usuario (A-20)
+  const user2 = await prisma.user.upsert({
+    where: { email: 'otro@example.com' },
+    update: { unitId: unitByCode.get('A-20') ?? null },
+    create: {
+      email: 'otro@example.com',
+      passwordHash,
+      unitId: unitByCode.get('A-20') ?? null,
+    },
+  });
+  console.log(`Usuario demo listo: ${user2.email} / ${DEMO_PASSWORD}`);
+
+  // 5. Admin (sin unidad)
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@example.com' },
+    update: { role: 'ADMINISTRADOR', unitId: null },
+    create: {
+      email: 'admin@example.com',
+      passwordHash,
+      role: 'ADMINISTRADOR',
+      unitId: null,
+    },
+  });
+  console.log(`Administrador demo listo: ${admin.email} / ${DEMO_PASSWORD}`);
+
+  // 6. Staff (sin unidad)
   for (const staff of STAFF) {
     const created = await prisma.user.upsert({
       where: { email: staff.email },
-      update: { role: staff.role },
-      create: { email: staff.email, passwordHash, unit: '', role: staff.role },
+      update: { role: staff.role, unitId: null },
+      create: {
+        email: staff.email,
+        passwordHash,
+        role: staff.role,
+        unitId: null,
+      },
     });
     console.log(`Usuario ${staff.role} listo: ${created.email} / ${DEMO_PASSWORD}`);
   }
 
+  // 7. Paquetes demo
   if ((await prisma.package.count()) > 0) return;
 
   const guard = await prisma.user.findUniqueOrThrow({

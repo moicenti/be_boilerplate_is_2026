@@ -14,7 +14,8 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { IncidenciasService } from '../services/index.js';
 import { CreateIncidenciaDto } from '../dto/index.js';
-import { CurrentUser } from '@Auth/decorators'; // Ajusta según tu path
+import { CurrentUser } from '@Auth/decorators';
+import type { User } from '@PrismaClient';
 
 @Controller('incidencias')
 export class IncidenciasController {
@@ -24,7 +25,7 @@ export class IncidenciasController {
   @UseInterceptors(
     FilesInterceptor('photos', 3, {
       storage: diskStorage({
-        destination: './uploads', // Asegúrate de crear esta carpeta
+        destination: './uploads',
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = extname(file.originalname);
@@ -32,36 +33,32 @@ export class IncidenciasController {
         },
       }),
       fileFilter: (req, file, cb) => {
-        // Validación: Solo JPG o PNG
         if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
           return cb(new BadRequestException('Solo se permiten archivos JPG o PNG'), false);
         }
         cb(null, true);
       },
-      limits: {
-        fileSize: 5 * 1024 * 1024, // 5 MB
-      },
+      limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
- async create(
-  @CurrentUser() user: { id: string; unit?: string | null },
-  @Body() createIncidenciaDto: CreateIncidenciaDto,
-  @UploadedFiles() files: Express.Multer.File[],
-) {
-  const photoUrls = files ? files.map((file) => `/uploads/${file.filename}`) : [];
-  return this.incidenciasService.create(user, createIncidenciaDto, photoUrls);
-}
+  async create(
+    @CurrentUser() user: User,
+    @Body() createIncidenciaDto: CreateIncidenciaDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    const photoUrls = files ? files.map((file) => `/uploads/${file.filename}`) : [];
+    return this.incidenciasService.create(user, createIncidenciaDto, photoUrls);
+  }
 
   @Get()
-  async findAll(@CurrentUser() user: {id: string}) {
-    console.log(user.id + " Id??????");
+  async findAll(@CurrentUser() user: User) {
     return this.incidenciasService.findAll(user.id);
   }
 
   @Get(':id')
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: {id: string},
+    @CurrentUser() user: User,
   ) {
     return this.incidenciasService.findOne(id, user.id);
   }
