@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import { ReservationStatus, type Reservation, type Unit } from '@PrismaClient';
+import { ReservationStatus, type Reservation } from '@PrismaClient';
 import { ReservationOverlapError } from '../errors/index.js';
 
 const OVERLAP_CONSTRAINT = 'reserva_sin_cruce';
@@ -16,10 +16,6 @@ export interface CreateReservationData {
 @Injectable()
 export class ReservationRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  findUnitByCode(code: string): Promise<Unit | null> {
-    return this.prisma.unit.findUnique({ where: { code } });
-  }
 
   hasOverlappingBlock(areaId: number, startsAt: Date, endsAt: Date): Promise<boolean> {
     return this.prisma.commonAreaBlock

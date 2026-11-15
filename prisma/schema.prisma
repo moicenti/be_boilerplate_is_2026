@@ -31,11 +31,15 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
-  unit          String
+  unitId        String?        @map("unit_id") @db.Uuid
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   role Role @default(RESIDENTE)
 
-  reports Report[]
+  reports         Report[]      @relation("UserReports")
+  assignedReports Report[]      @relation("AssignedReports")
+  resolvedReports Report[]      @relation("ResolvedReports")
+  events          ReportEvent[]
 
   receivedPackages  Package[] @relation("PackageReceivedBy")
   deliveredPackages Package[] @relation("PackageDeliveredBy")
@@ -59,15 +63,23 @@ enum Role {
   RESIDENTE
   ADMINISTRADOR
   SEGURIDAD
+  MANTENIMIENTO
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
 }
 
 model Unit {
-  id          String   @id @default(uuid()) @db.Uuid
-  code        String   @unique
-  tower       String
-  description String
-  createdAt   DateTime @default(now()) @map("created_at")
-
+  id             String         @id @default(uuid()) @db.Uuid
+  code           String         @unique
+  tower          String
+  description    String
+  createdAt      DateTime       @default(now()) @map("created_at")
+  users          User[]
   packages       Package[]
   notificaciones Notificacion[]
   reservations   Reservation[]
@@ -137,30 +149,55 @@ model Report {
   status      String @default("Abierto")
   unit        String
 
+  priority              Priority?
+  priorityJustification String?   @map("priority_justification")
+  assigneeId            String?   @map("assignee_id") @db.Uuid
+  dueDate               DateTime? @map("due_date")
+
+  resolvedAt        DateTime? @map("resolved_at")
+  resolvedById      String?   @map("resolved_by_id") @db.Uuid
+  resolutionComment String?   @map("resolution_comment")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relación con el usuario que crea el reporte
   userId String @map("user_id") @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserReports", fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relación con las fotos
+  assignee   User? @relation("AssignedReports", fields: [assigneeId], references: [id])
+  resolvedBy User? @relation("ResolvedReports", fields: [resolvedById], references: [id])
+
   photos ReportPhoto[]
+  events ReportEvent[]
 
   @@map("reports")
 }
 
 model ReportPhoto {
   id        String   @id @default(uuid()) @db.Uuid
-  url       String // Ruta o URL del archivo guardado
+  url       String
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relación con el reporte
   reportId String @map("report_id") @db.Uuid
   report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@map("report_photos")
+}
+
+model ReportEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  action    String
+  metadata  Json?
+  userId    String   @map("user_id") @db.Uuid
+  reportId  String   @map("report_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_events")
 }
 
 // ───────────── H23: notificaciones ─────────────
@@ -257,7 +294,6 @@ model CommonArea {
   status             CommonAreaStatus @default(ACTIVA) @map("estado")
   createdAt          DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
 
-  // Eliminación lógica: quién y cuándo.
   deletedAt   DateTime? @map("eliminado_en") @db.Timestamptz(6)
   deletedById String?   @map("eliminado_por") @db.Uuid
   deletedBy   User?     @relation("CommonAreaDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
@@ -267,7 +303,6 @@ model CommonArea {
   reservations Reservation[]
   changes      CommonAreaChange[]
 
-  // El nombre es único solo entre áreas ACTIVAS: una eliminada libera su nombre.
   @@unique([name], map: "area_comun_nombre_activa_key", where: raw("estado = 'ACTIVA'"))
   @@map("area_comun")
 }
@@ -280,7 +315,6 @@ model CommonAreaSchedule {
   opensAt   DateTime   @map("hora_apertura") @db.Time(0)
   closesAt  DateTime   @map("hora_cierre") @db.Time(0)
 
-  // Un horario por día.
   @@unique([areaId, dayOfWeek])
   @@map("horario_area")
 }
@@ -313,7 +347,6 @@ enum CommonAreaChangeField {
   DURACION_BLOQUE
 }
 
-/// Historial de cambios de capacidad, horario y duración de bloque de un área.
 model CommonAreaChange {
   id            Int                   @id @default(autoincrement())
   areaId        Int                   @map("area_id")
@@ -392,11 +425,9 @@ model ComunicadoOficial {
   estado           EstadoComunicado    @default(PUBLICADO)
   fechaPublicacion DateTime            @default(now()) @map("fecha_publicacion") @db.Timestamptz
 
-  // Llave foránea hacia el Administrador emisor (UUID)
   emisorId String @map("emisor_id") @db.Uuid
   emisor   User   @relation("ComunicadosEmitidos", fields: [emisorId], references: [id], onDelete: Restrict)
 
-  // Adjuntos y lecturas
   adjuntos ComunicadoAdjunto[]
   lecturas LecturaComunicado[]
 

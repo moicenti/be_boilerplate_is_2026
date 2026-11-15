@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 import { IsNormalizedEmail } from '@Common/decorators';
 
 export class CreateUserDto {
@@ -20,16 +20,16 @@ export class CreateUserDto {
   })
   @IsString()
   @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
-  // bcrypt trunca silenciosamente en 72 bytes, así que se rechaza antes de hashear.
   @MaxLength(72, { message: 'La contraseña no puede superar los 72 caracteres.' })
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/, {
     message: 'La contraseña debe incluir al menos una minúscula, una mayúscula y un número.',
   })
   password!: string;
 
-  @IsString()
-  @Matches(/^[A-Z]+-(?:[1-9]\d*)$/, {
-  message: 'La unidad debe tener el formato A-12, AB-3321 (letras mayúsculas, guion, número sin ceros al inicio)',
-})
-  unit: string;
+  @ApiProperty({
+    description: 'UUID de la unidad a la que pertenece el usuario.',
+    format: 'uuid',
+  })
+  @IsUUID('4', { message: 'unitId debe ser un UUID válido.' })
+  unitId!: string;
 }

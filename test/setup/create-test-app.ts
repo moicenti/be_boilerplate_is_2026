@@ -10,9 +10,9 @@ import { Role } from '@PrismaClient';
 export const PASSWORD = 'Test1234!';
 
 export const USERS = {
-  seguridad: { email: 'guardia@test.com', role: Role.SEGURIDAD, unit: '' },
-  seguridad2: { email: 'guardia2@test.com', role: Role.SEGURIDAD, unit: '' },
-  admin: { email: 'admin@test.com', role: Role.ADMINISTRADOR, unit: '' },
+  seguridad: { email: 'guardia@test.com', role: Role.SEGURIDAD, unit: null },
+  seguridad2: { email: 'guardia2@test.com', role: Role.SEGURIDAD, unit: null },
+  admin: { email: 'admin@test.com', role: Role.ADMINISTRADOR, unit: null },
   residente: {
     email: 'residente@test.com',
     role: Role.RESIDENTE,
@@ -58,8 +58,15 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
   });
 
   const passwordHash = await bcrypt.hash(PASSWORD, 4);
+  const unitIds = new Map(
+    (await prisma.unit.findMany()).map((unit) => [unit.code, unit.id]),
+  );
   await prisma.user.createMany({
-    data: Object.values(USERS).map((user) => ({ ...user, passwordHash })),
+    data: Object.values(USERS).map(({ unit, ...user }) => ({
+      ...user,
+      unitId: unit ? (unitIds.get(unit) ?? null) : null,
+      passwordHash,
+    })),
   });
 }
 

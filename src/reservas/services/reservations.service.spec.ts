@@ -8,8 +8,8 @@ import { ReservationsService } from './reservations.service.js';
 import type { ReservationRepository } from '../repositories/index.js';
 import { ReservationOverlapError } from '../errors/index.js';
 
-const resident = { id: 'resident-id', unit: 'A-304' } as User;
 const unit = { id: 'unit-a304', code: 'A-304' };
+const resident = { id: 'resident-id', unitId: unit.id } as User;
 
 // Sábado (6) de 10:00 a 20:00, hora de El Salvador (UTC-6).
 const area = {
@@ -53,7 +53,6 @@ describe('ReservationsService', () => {
     vi.setSystemTime(new Date('2026-11-14T12:00:00Z'));
 
     repository = {
-      findUnitByCode: vi.fn().mockResolvedValue(unit),
       hasOverlappingBlock: vi.fn().mockResolvedValue(false),
       findAllByUnit: vi.fn().mockResolvedValue([]),
       findById: vi.fn(),
@@ -78,7 +77,6 @@ describe('ReservationsService', () => {
     it('crea la reserva con residente y unidad de la sesión', async () => {
       await service.create(dto('2026-11-14T14:00:00-06:00', '2026-11-14T16:00:00-06:00'), resident);
 
-      expect(repository.findUnitByCode).toHaveBeenCalledWith('A-304');
       expect(repository.create).toHaveBeenCalledWith({
         areaId: 2,
         residentId: resident.id,
@@ -159,9 +157,11 @@ describe('ReservationsService', () => {
     });
 
     it('rechaza a un usuario sin unidad registrada con 403', async () => {
-      repository.findUnitByCode.mockResolvedValue(null);
       await expectApiError(
-        service.create(dto('2026-11-14T14:00:00-06:00', '2026-11-14T16:00:00-06:00'), resident),
+        service.create(
+          dto('2026-11-14T14:00:00-06:00', '2026-11-14T16:00:00-06:00'),
+          { ...resident, unitId: null },
+        ),
         HttpStatus.FORBIDDEN,
         'UNIDAD_NO_ASIGNADA',
       );
