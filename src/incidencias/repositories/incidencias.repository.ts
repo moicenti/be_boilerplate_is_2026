@@ -189,4 +189,40 @@ export class IncidenciaRepository {
       where: { id, role: 'MANTENIMIENTO', isActive: true },
     });
   }
+
+  async confirmResolution(id: string, userId: string) {
+  return this.prisma.report.update({
+    where: { id },
+    data: {
+      status: 'Cerrado',
+      events: {
+        create: {
+          action: 'CONFIRMADO',
+          userId,
+          metadata: { confirmedAt: new Date().toISOString() },
+        },
+      },
+    },
+    include: { photos: true, events: true },
+  });
+}
+
+async rejectResolution(id: string, userId: string, comment: string) {
+  return this.prisma.report.update({
+    where: { id },
+    data: {
+      status: 'En atención',
+      events: {
+        create: {
+          action: 'RECHAZADO',
+          userId,
+          metadata: { rejectionComment: comment },
+        },
+      },
+    },
+    include: { photos: true, events: true },
+  });
+}
+
+
 }
