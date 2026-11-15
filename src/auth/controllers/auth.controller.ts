@@ -62,7 +62,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Devuelve el usuario autenticado' })
   @ApiOkResponse({ type: UserResponseDto })
   @ApiUnauthorizedResponse({ description: 'Token ausente, inválido o expirado.' })
+  
   me(@CurrentUser() user: User): UserResponseDto {
-    return UserResponseDto.fromEntity(user);
-  }
+  return UserResponseDto.fromEntity(user);
+}
 }
