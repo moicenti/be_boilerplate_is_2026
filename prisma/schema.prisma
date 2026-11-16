@@ -48,6 +48,9 @@ model User {
   commonAreaChanges  CommonAreaChange[]
   commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
+  feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
+  feeRuleChanges     FeeRuleChange[]
+  generationRuns     GenerationRun[]
 
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
@@ -74,17 +77,30 @@ enum Priority {
 }
 
 model Unit {
-  id             String         @id @default(uuid()) @db.Uuid
-  code           String         @unique
-  tower          String
-  description    String
-  createdAt      DateTime       @default(now()) @map("created_at")
-  users          User[]
-  packages       Package[]
-  notificaciones Notificacion[]
-  reservations   Reservation[]
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  tower       String
+  description String
+  type        UnitType @default(DEPARTAMENTO) @map("tipo")
+  // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
+  active      Boolean  @default(true) @map("activa")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  users            User[]
+  packages         Package[]
+  notificaciones   Notificacion[]
+  reservations     Reservation[]
+  fees             Fee[]
+  feeRules         FeeRuleUnit[]
+  generationErrors GenerationError[]
 
   @@map("units")
+}
+
+enum UnitType {
+  DEPARTAMENTO
+  CASA
+  LOCAL
 }
 
 enum PackageStatus {
@@ -460,4 +476,179 @@ model LecturaComunicado {
 
   @@unique([comunicadoId, residenteId])
   @@map("lectura_comunicado")
+}
+
+// ==========================================
+// Cuotas (DB-1.1) y reglas de generación (H3)
+// ==========================================
+
+enum FeeStatus {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  ANULADA
+}
+
+/// Cuota de una unidad. La tabla de pagos llega con H1; el saldo no se almacena.
+model Fee {
+  id        Int       @id @default(autoincrement())
+  unitId    String    @map("unidad_id") @db.Uuid
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  // Nula para cuotas creadas a mano. Restrict: una regla con cuotas no se elimina.
+  ruleId    Int?      @map("regla_id")
+  rule      FeeRule?  @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  concept   String    @map("concepto")
+  period    String    @map("periodo") @db.Char(7)
+  amount    Decimal   @map("monto") @db.Decimal(12, 2)
+  dueDate   DateTime  @map("fecha_vencimiento") @db.Date
+  status    FeeStatus @default(PENDIENTE) @map("estado")
+  createdAt DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  @@unique([unitId, ruleId, period], map: "cuota_unidad_regla_periodo_key")
+  @@index([unitId, status])
+  @@index([status, dueDate])
+  @@map("cuota")
+}
+
+enum FeeAmountType {
+  FIJO
+  POR_TIPO_UNIDAD
+}
+
+enum FeeRuleScope {
+  TODAS
+  TIPO
+  TORRE
+  SELECCION
+}
+
+enum InactiveUnitPolicy {
+  GENERAR
+  OMITIR
+  REVISAR
+}
+
+enum FeeRuleStatus {
+  ACTIVA
+  PAUSADA
+  INACTIVA
+}
+
+model FeeRule {
+  id             Int                @id @default(autoincrement())
+  concept        String             @map("concepto")
+  amountType     FeeAmountType      @map("tipo_monto")
+  // Nulo mientras la regla está incompleta (no se puede activar así).
+  amount         Decimal?           @map("monto") @db.Decimal(12, 2)
+  generationDay  Int                @map("dia_generacion") @db.SmallInt
+  dueDay         Int                @map("dia_vencimiento") @db.SmallInt
+  scope          FeeRuleScope       @map("alcance")
+  // Torre (alcance TORRE) o tipo de unidad (alcance TIPO).
+  scopeValue     String?            @map("alcance_valor")
+  inactivePolicy InactiveUnitPolicy @default(OMITIR) @map("politica_inactivas")
+  status         FeeRuleStatus      @default(ACTIVA) @map("estado")
+  createdById    String?            @map("creado_por") @db.Uuid
+  createdBy      User?              @relation("FeeRuleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  units       FeeRuleUnit[]
+  typeAmounts FeeRuleTypeAmount[]
+  fees        Fee[]
+  runs        GenerationRun[]
+  changes     FeeRuleChange[]
+
+  @@index([status, generationDay])
+  @@map("regla_cuota")
+}
+
+/// Unidades de una regla con alcance SELECCION.
+model FeeRuleUnit {
+  ruleId Int     @map("regla_id")
+  rule   FeeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  unitId String  @map("unidad_id") @db.Uuid
+  unit   Unit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@id([ruleId, unitId])
+  @@map("regla_cuota_unidad")
+}
+
+/// Monto por tipo de unidad de una regla POR_TIPO_UNIDAD.
+model FeeRuleTypeAmount {
+  ruleId   Int      @map("regla_id")
+  rule     FeeRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  unitType UnitType @map("tipo_unidad")
+  amount   Decimal  @map("monto") @db.Decimal(12, 2)
+
+  @@id([ruleId, unitType])
+  @@map("regla_cuota_monto_tipo")
+}
+
+enum FeeRuleAction {
+  CREACION
+  EDICION
+  CAMBIO_ESTADO
+}
+
+/// Auditoría de reglas: quién cambió qué y cuándo.
+model FeeRuleChange {
+  id            Int           @id @default(autoincrement())
+  ruleId        Int           @map("regla_id")
+  rule          FeeRule       @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  action        FeeRuleAction @map("accion")
+  previousValue Json?         @map("valor_anterior")
+  newValue      Json          @map("valor_nuevo")
+  changedById   String?       @map("usuario_id") @db.Uuid
+  changedBy     User?         @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt     DateTime      @default(now()) @map("cambiado_en") @db.Timestamptz(6)
+
+  @@index([ruleId])
+  @@map("regla_cuota_historial")
+}
+
+enum GenerationOrigin {
+  AUTOMATICA
+  MANUAL
+}
+
+enum GenerationRunStatus {
+  EN_CURSO
+  COMPLETADA
+  CON_ERRORES
+}
+
+model GenerationRun {
+  id         Int                 @id @default(autoincrement())
+  ruleId     Int                 @map("regla_id")
+  rule       FeeRule             @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  period     String              @map("periodo") @db.Char(7)
+  origin     GenerationOrigin    @map("origen")
+  // Nulo si es automática.
+  userId     String?             @map("usuario_id") @db.Uuid
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  startedAt  DateTime            @default(now()) @map("inicio") @db.Timestamptz(6)
+  finishedAt DateTime?           @map("fin") @db.Timestamptz(6)
+  created    Int                 @default(0) @map("creadas")
+  omitted    Int                 @default(0) @map("omitidas")
+  failed     Int                 @default(0) @map("con_error")
+  status     GenerationRunStatus @default(EN_CURSO) @map("estado")
+
+  errors GenerationError[]
+
+  // Nunca dos ejecuciones en curso para la misma regla y periodo.
+  @@unique([ruleId, period], map: "ejecucion_generacion_en_curso_key", where: raw("estado = 'EN_CURSO'"))
+  @@index([ruleId, period])
+  @@map("ejecucion_generacion")
+}
+
+model GenerationError {
+  id     Int           @id @default(autoincrement())
+  runId  Int           @map("ejecucion_id")
+  run    GenerationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  unitId String        @map("unidad_id") @db.Uuid
+  unit   Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  cause  String        @map("causa")
+
+  @@index([runId])
+  @@map("ejecucion_error")
 }
