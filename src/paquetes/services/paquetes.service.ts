@@ -133,16 +133,16 @@ export class PaquetesService {
       totalPages: 1,
       pendingCount: 0,
     };
-    if (!user.unit) return empty;
+    if (!user.unitId) return empty;
 
     const [{ items, total }, pendingCount] = await Promise.all([
       this.packageRepository.findPageForUnit(
-        user.unit,
+        user.unitId,
         query.estado,
         (query.page - 1) * PAGE_SIZE,
         PAGE_SIZE,
       ),
-      this.packageRepository.countPendingForUnit(user.unit),
+      this.packageRepository.countPendingForUnit(user.unitId),
     ]);
 
     return {
@@ -194,7 +194,7 @@ export class PaquetesService {
   }
 
   private belongsToUnitOf(pkg: PackageWithRelations, user: User): boolean {
-    return Boolean(user.unit) && pkg.unit.code === user.unit;
+    return Boolean(user.unitId) && pkg.unitId === user.unitId;
   }
 
   private async findOrFail(id: string): Promise<PackageWithRelations> {

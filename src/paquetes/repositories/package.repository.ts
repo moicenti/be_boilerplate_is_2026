@@ -94,13 +94,13 @@ export class PackageRepository {
   }
 
   async findPageForUnit(
-    unitCode: string,
+    unitId: string,
     status: PackageStatus | undefined,
     skip: number,
     take: number,
   ): Promise<{ items: PackageWithRelations[]; total: number }> {
     const where: Prisma.PackageWhereInput = {
-      unit: { code: unitCode },
+      unitId,
       ...(status ? { status } : {}),
     };
 
@@ -117,10 +117,10 @@ export class PackageRepository {
     return { items, total };
   }
 
-  countPendingForUnit(unitCode: string): Promise<number> {
+  countPendingForUnit(unitId: string): Promise<number> {
     return this.prisma.package.count({
       where: {
-        unit: { code: unitCode },
+        unitId,
         status: PackageStatus.PENDIENTE_RETIRO,
       },
     });

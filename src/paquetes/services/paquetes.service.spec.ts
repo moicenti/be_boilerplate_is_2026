@@ -36,6 +36,7 @@ const pending = {
   pickupCode: '482913',
   deliveredAt: null,
   deliveredTo: null,
+  unitId: unit.id,
   unit: { code: 'A-202' },
 } as unknown as PackageWithRelations;
 
@@ -227,9 +228,9 @@ describe('PaquetesService para residentes', () => {
   const resident = {
     id: 'res-id',
     role: Role.RESIDENTE,
-    unit: 'A-202',
+    unitId: unit.id,
   } as User;
-  const neighbor = { ...resident, unit: 'B-103' } as User;
+  const neighbor = { ...resident, unitId: 'otra-unidad' } as User;
   const securityGuard = { ...guard, role: Role.SEGURIDAD } as User;
 
   it('lista los paquetes de la unidad del residente con su total de pendientes', async () => {
@@ -241,12 +242,12 @@ describe('PaquetesService para residentes', () => {
     });
 
     expect(packageRepository.findPageForUnit).toHaveBeenCalledWith(
-      'A-202',
+      unit.id,
       PackageStatus.ENTREGADO,
       20,
       20,
     );
-    expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith('A-202');
+    expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith(unit.id);
     expect(result).toMatchObject({
       page: 2,
       total: 25,
@@ -259,7 +260,7 @@ describe('PaquetesService para residentes', () => {
     const { service, packageRepository } = setup();
 
     const result = await service.listForResident(
-      { ...resident, unit: '' } as User,
+      { ...resident, unitId: null } as User,
       { page: 1 },
     );
 
