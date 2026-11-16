@@ -61,11 +61,13 @@
       "@Notificaciones": ["./src/notificaciones/index.ts"],
       "@Notificaciones/*": ["./src/notificaciones/*/index.ts"],
       "@Visitas": ["./src/visitas/index.ts"],
-      "@Visitas/*": ["./src/visitas/*/index.ts"]
+      "@Visitas/*": ["./src/visitas/*/index.ts"],
       "@Reservas": ["./src/reservas/index.ts"],
       "@Reservas/*": ["./src/reservas/*/index.ts"],
       "@Cuotas": ["./src/cuotas/index.ts"],
-      "@Cuotas/*": ["./src/cuotas/*/index.ts"]
+      "@Cuotas/*": ["./src/cuotas/*/index.ts"],
+      "@Anuncio": ["./src/anuncio/index.ts"],
+      "@Anuncio/*": ["./src/anuncio/*/index.ts"]
     }
   }
 }
