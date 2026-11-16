@@ -11,7 +11,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificacionesModule } from '@Notificaciones';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { IncidenciasModule } from './incidencias/incidencias.module.js';
+import { IncidenciasModule } from '@Incidencias';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
 import { AsambleasModule } from '@Asambleas';
@@ -19,6 +19,7 @@ import { CommonAreasModule } from '@CommonAreas';
 import { ReservasModule } from '@Reservas';
 import { CuotasModule } from '@Cuotas';
 import { AnunciosModule } from './anuncio/index.js';
+import { VisitasModule } from '@Visitas';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AnunciosModule } from './anuncio/index.js';
     PaquetesModule,
     AsambleasModule,
     CommonAreasModule,
+    VisitasModule,
     ReservasModule,
     CuotasModule,
     ServeStaticModule.forRoot({

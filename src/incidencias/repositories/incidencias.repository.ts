@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { Priority } from '@PrismaClient';
-import { CreateIncidenciaDto } from '../dto/index.js';
+import { CreateIncidenciaDto } from '@Incidencias/dto';
 
 @Injectable()
 export class IncidenciaRepository {
