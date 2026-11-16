@@ -16,6 +16,7 @@ import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
 import { CommonAreasModule } from '@CommonAreas';
 import { AnunciosModule } from './anuncio/index.js';
+import { VisitasModule } from './visitas/visitas.module.js';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { AnunciosModule } from './anuncio/index.js';
     UnidadesModule,
     PaquetesModule,
     CommonAreasModule,
+    VisitasModule,
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
