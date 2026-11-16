@@ -130,51 +130,56 @@ export class IncidenciaRepository {
     });
   }
 
-  async findAllAdmin(filters: {
-    status?: string;
-    priority?: Priority;
-    unit?: string;
-  }) {
-    return this.prisma.report.findMany({
-      where: {
-        ...(filters.status && { status: filters.status }),
-        ...(filters.priority && { priority: filters.priority }),
-        ...(filters.unit && { unit: filters.unit }),
-      },
-      include: {
-        photos: true,
-        assignee: true,
-        user: true,
-      },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
-    });
-  }
+ async findAllAdmin(filters: { status?: string; priority?: Priority; unit?: string }) {
+  return this.prisma.report.findMany({
+    where: {
+      ...(filters.status && { status: filters.status }),
+      ...(filters.priority && { priority: filters.priority }),
+      ...(filters.unit && { unit: filters.unit }),
+    },
+    include: {
+      photos: true,
+      assignee: true,
+      user: true,
+      events: { orderBy: { createdAt: 'asc' } },  
+    },
+    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+  });
+}
 
   async countOpenByPriority() {
-    const groups = await this.prisma.report.groupBy({
+  const OPEN_STATUSES = ['Abierto', 'En atención', 'Rechazado'];
+
+  const [groups, rechazados] = await Promise.all([
+    this.prisma.report.groupBy({
       by: ['priority'],
-      where: { status: { in: ['Abierto', 'En atención'] } },
+      where: { status: { in: OPEN_STATUSES } },
       _count: { _all: true },
-    });
+    }),
+    this.prisma.report.count({
+      where: { status: 'Rechazado' },
+    }),
+  ]);
 
-    const result: Record<string, number> = {
-      BAJA: 0,
-      MEDIA: 0,
-      ALTA: 0,
-      CRITICA: 0,
-      SIN_PRIORIDAD: 0,
-    };
+  const result: Record<string, number> = {
+    BAJA: 0,
+    MEDIA: 0,
+    ALTA: 0,
+    CRITICA: 0,
+    SIN_PRIORIDAD: 0,
+    RECHAZADOS: rechazados,  // ← NUEVO
+  };
 
-    for (const group of groups) {
-      if (group.priority) {
-        result[group.priority] = group._count._all;
-      } else {
-        result.SIN_PRIORIDAD = group._count._all;
-      }
+  for (const group of groups) {
+    if (group.priority) {
+      result[group.priority] = group._count._all;
+    } else {
+      result.SIN_PRIORIDAD = group._count._all;
     }
-
-    return result;
   }
+
+  return result;
+}
 
   async findMaintenanceUsers() {
     return this.prisma.user.findMany({
@@ -189,4 +194,42 @@ export class IncidenciaRepository {
       where: { id, role: 'MANTENIMIENTO', isActive: true },
     });
   }
+
+  async confirmResolution(id: string, userId: string) {
+  return this.prisma.report.update({
+    where: { id },
+    data: {
+      status: 'Cerrado',
+      events: {
+        create: {
+          action: 'CONFIRMADO',
+          userId,
+          metadata: { confirmedAt: new Date().toISOString() },
+        },
+      },
+    },
+    include: { photos: true, events: true },
+  });
+}
+
+async rejectResolution(id: string, userId: string, comment: string) {
+  return this.prisma.report.update({
+    where: { id },
+    data: {
+      status: 'Rechazado',
+      resolutionComment: null,
+      resolvedAt: null,
+      resolvedById: null,
+      events: {
+        create: {
+          action: 'RECHAZADO',
+          userId,
+          metadata: { rejectionComment: comment },
+        },
+      },
+    },
+    include: { photos: true, events: true },
+  });
+}
+
 }

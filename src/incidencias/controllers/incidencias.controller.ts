@@ -22,6 +22,7 @@ import {
   CreateIncidenciaDto,
   FilterIncidenciaDto,
   ResolverIncidenciaDto,
+  RechazarResolucionDto,
 } from '../dto/index.js';
 
 @Controller('incidencias')
@@ -105,4 +106,22 @@ export class IncidenciasController {
   ) {
     return this.incidenciasService.resolveReport(id, dto, user);
   }
+
+  @Patch(':id/confirmar')
+async confirm(
+  @Param('id', ParseUUIDPipe) id: string,
+  @CurrentUser() user: User,
+) {
+  return this.incidenciasService.confirmResolution(id, user.id);
+}
+
+@Patch(':id/rechazar')
+async reject(
+  @Param('id', ParseUUIDPipe) id: string,
+  @Body() dto: RechazarResolucionDto,
+  @CurrentUser() user: User,
+) {
+  return this.incidenciasService.rejectResolution(id, user.id, dto.comment);
+}
+  
 }

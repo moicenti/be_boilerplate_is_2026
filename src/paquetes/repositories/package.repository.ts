@@ -93,6 +93,39 @@ export class PackageRepository {
     return { items, total };
   }
 
+  async findPageForUnit(
+    unitId: string,
+    status: PackageStatus | undefined,
+    skip: number,
+    take: number,
+  ): Promise<{ items: PackageWithRelations[]; total: number }> {
+    const where: Prisma.PackageWhereInput = {
+      unitId,
+      ...(status ? { status } : {}),
+    };
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.package.findMany({
+        where,
+        include: packageInclude,
+        orderBy: [{ receivedAt: 'desc' }, { number: 'desc' }],
+        skip,
+        take,
+      }),
+      this.prisma.package.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  countPendingForUnit(unitId: string): Promise<number> {
+    return this.prisma.package.count({
+      where: {
+        unitId,
+        status: PackageStatus.PENDIENTE_RETIRO,
+      },
+    });
+  }
+
   async pendingSummary(): Promise<PendingSummary> {
     const where = { status: PackageStatus.PENDIENTE_RETIRO };
     const [pendingCount, recipients] = await this.prisma.$transaction([

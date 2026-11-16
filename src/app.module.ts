@@ -14,6 +14,7 @@ import { join } from 'path';
 import { IncidenciasModule } from './incidencias/incidencias.module.js';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
+import { AsambleasModule } from '@Asambleas';
 import { CommonAreasModule } from '@CommonAreas';
 import { ReservasModule } from '@Reservas';
 import { CuotasModule } from '@Cuotas';
@@ -34,6 +35,7 @@ import { AnunciosModule } from './anuncio/index.js';
     IncidenciasModule,
     UnidadesModule,
     PaquetesModule,
+    AsambleasModule,
     CommonAreasModule,
     ReservasModule,
     CuotasModule,

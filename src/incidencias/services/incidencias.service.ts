@@ -15,7 +15,7 @@ import {
 import type { Unit } from '@PrismaClient';
 
 const UNIT_REGEX = /^[A-Z]+-(?:[1-9]\d*)$/;
-const ASSIGNABLE_STATUSES = ['Abierto', 'En atención'];
+const ASSIGNABLE_STATUSES = ['Abierto', 'En atención', 'Rechazado'];
 const RESOLVABLE_STATUSES = ['En atención'];
 
 @Injectable()
@@ -103,8 +103,10 @@ export class IncidenciasService {
       );
     }
 
-    const newStatus = report.status === 'Abierto' ? 'En atención' : report.status;
-
+const newStatus = ['Abierto', 'Rechazado'].includes(report.status)
+  ? 'En atención'
+  : report.status;
+  
     return this.incidenciaRepository.assign(reportId, {
       priority: dto.priority,
       assigneeId: dto.assigneeId,
@@ -164,4 +166,52 @@ export class IncidenciasService {
   async findMaintenanceUsers() {
     return this.incidenciaRepository.findMaintenanceUsers();
   }
+
+  async confirmResolution(reportId: string, userId: string) {
+  const report = await this.incidenciaRepository.findById(reportId);
+  if (!report) throw new NotFoundException('Reporte no encontrado');
+
+  // Solo el dueño puede confirmar
+  if (report.userId !== userId) {
+    throw new ForbiddenException(
+      'Solo el dueño del reporte puede confirmar la resolución',
+    );
+  }
+
+  // Solo se puede confirmar si está en estado "Resuelto"
+  if (report.status !== 'Resuelto') {
+    throw new BadRequestException(
+      `Solo se pueden confirmar reportes en estado "Resuelto". Estado actual: "${report.status}".`,
+    );
+  }
+
+  return this.incidenciaRepository.confirmResolution(reportId, userId);
+}
+
+async rejectResolution(reportId: string, userId: string, comment: string) {
+  const report = await this.incidenciaRepository.findById(reportId);
+  if (!report) throw new NotFoundException('Reporte no encontrado');
+
+  if (report.userId !== userId) {
+    throw new ForbiddenException(
+      'Solo el dueño del reporte puede rechazar la resolución',
+    );
+  }
+
+  if (report.status !== 'Resuelto') {
+    throw new BadRequestException(
+      `Solo se pueden rechazar reportes en estado "Resuelto". Estado actual: "${report.status}".`,
+    );
+  }
+
+  const trimmed = comment?.trim() ?? '';
+  if (trimmed.length < 10 || trimmed.length > 200) {
+    throw new BadRequestException(
+      'El comentario de rechazo es obligatorio (10-200 caracteres)',
+    );
+  }
+
+  return this.incidenciaRepository.rejectResolution(reportId, userId, trimmed);
+}
+
 }

@@ -2,11 +2,23 @@
 ALTER TABLE "reserva" RENAME COLUMN "usuario_id" TO "residente_id";
 ALTER TABLE "reserva" RENAME CONSTRAINT "reserva_usuario_id_fkey" TO "reserva_residente_id_fkey";
 
--- unidad_id se rellena con la unidad actual del residente (users.unit = units.code).
+-- unidad_id se rellena con la unidad actual del residente. Si esta migración corre después
+-- de 20261115201916_fixing_unit (bases que ya tenían develop), users.unit ya no existe y se usa users.unit_id.
 ALTER TABLE "reserva" ADD COLUMN "unidad_id" UUID;
-UPDATE "reserva" r SET "unidad_id" = un."id"
-  FROM "users" u JOIN "units" un ON un."code" = u."unit"
-  WHERE u."id" = r."residente_id";
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = current_schema() AND table_name = 'users' AND column_name = 'unit_id'
+  ) THEN
+    EXECUTE 'UPDATE "reserva" r SET "unidad_id" = u."unit_id"
+      FROM "users" u WHERE u."id" = r."residente_id"';
+  ELSE
+    EXECUTE 'UPDATE "reserva" r SET "unidad_id" = un."id"
+      FROM "users" u JOIN "units" un ON un."code" = u."unit"
+      WHERE u."id" = r."residente_id"';
+  END IF;
+END $$;
 ALTER TABLE "reserva" ALTER COLUMN "unidad_id" SET NOT NULL;
 
 ALTER TABLE "reserva" ALTER COLUMN "estado" SET DEFAULT 'CONFIRMADA';
