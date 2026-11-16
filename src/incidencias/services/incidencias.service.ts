@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Priority, Role } from '@PrismaClient';
-import { IncidenciaRepository } from '../repositories/index.js';
+import { IncidenciaRepository } from '@Incidencias/repositories';
 import {
   AsignarIncidenciaDto,
   CreateIncidenciaDto,
