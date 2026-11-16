@@ -56,6 +56,8 @@ model User {
   notificacionesRecibidas  Notificacion[]           @relation("NotificacionesRecibidas")
   lotesEmitidos            LoteNotificacion[]       @relation("LotesEmitidos")
 
+  createdAssemblies Assembly[] @relation("AssemblyCreatedBy")
+
   @@map("users")
 }
 
@@ -454,4 +456,83 @@ model LecturaComunicado {
 
   @@unique([comunicadoId, residenteId])
   @@map("lectura_comunicado")
+}
+
+enum AssemblyType {
+  ORDINARIA
+  EXTRAORDINARIA
+}
+
+enum AssemblyModality {
+  PRESENCIAL
+  VIRTUAL
+  HIBRIDA
+}
+
+model Assembly {
+  id          String           @id @default(uuid()) @db.Uuid
+  number      Int              @unique @default(autoincrement())
+  folio       String           @unique
+  title       String
+  type        AssemblyType
+  modality    AssemblyModality
+  startsAt    DateTime         @map("starts_at")
+  endsAt      DateTime         @map("ends_at")
+  location    String
+  description String
+  publishedAt DateTime?        @map("published_at")
+
+  createdById String   @map("created_by_id") @db.Uuid
+  createdBy   User     @relation("AssemblyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  agendaItems AgendaItem[]
+  topics      VotingTopic[]
+
+  @@index([startsAt])
+  @@map("asambleas")
+}
+
+model AgendaItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  assemblyId  String  @map("assembly_id") @db.Uuid
+  title       String
+  description String?
+  position    Int
+
+  assembly Assembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+
+  @@unique([assemblyId, position])
+  @@map("puntos_agenda")
+}
+
+model VotingTopic {
+  id          String   @id @default(uuid()) @db.Uuid
+  assemblyId  String   @map("assembly_id") @db.Uuid
+  title       String
+  description String
+  opensAt     DateTime @map("opens_at")
+  closesAt    DateTime @map("closes_at")
+  position    Int
+
+  assembly Assembly       @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  options  VotingOption[]
+
+  @@unique([assemblyId, position])
+  @@index([opensAt, closesAt])
+  @@map("temas_votacion")
+}
+
+model VotingOption {
+  id       String @id @default(uuid()) @db.Uuid
+  topicId  String @map("topic_id") @db.Uuid
+  text     String
+  position Int
+
+  topic VotingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, position])
+  @@unique([topicId, text])
+  @@map("opciones_votacion")
 }
