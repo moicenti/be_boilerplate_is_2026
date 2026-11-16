@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsInt, Matches, Max, Min } from 'class-validator';
 
-const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export class ScheduleDto {
   @ApiProperty({ minimum: 0, maximum: 6, example: 6, description: '0 = domingo … 6 = sábado' })

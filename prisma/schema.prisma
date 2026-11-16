@@ -84,6 +84,7 @@ model Unit {
   users          User[]
   packages       Package[]
   notificaciones Notificacion[]
+  reservations   Reservation[]
 
   @@map("units")
 }
@@ -370,17 +371,21 @@ enum ReservationStatus {
 }
 
 model Reservation {
-  id        Int               @id @default(autoincrement())
-  areaId    Int               @map("area_id")
-  area      CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  userId    String            @map("usuario_id") @db.Uuid
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startsAt  DateTime          @map("inicio") @db.Timestamptz(6)
-  endsAt    DateTime          @map("fin") @db.Timestamptz(6)
-  status    ReservationStatus @default(PENDIENTE) @map("estado")
-  createdAt DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
+  id         Int               @id @default(autoincrement())
+  areaId     Int               @map("area_id")
+  area       CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  residentId String            @map("residente_id") @db.Uuid
+  resident   User              @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  unitId     String            @map("unidad_id") @db.Uuid
+  unit       Unit              @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  startsAt   DateTime          @map("inicio") @db.Timestamptz(6)
+  endsAt     DateTime          @map("fin") @db.Timestamptz(6)
+  status     ReservationStatus @default(CONFIRMADA) @map("estado")
+  createdAt  DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
 
+  // La exclusión de cruces entre CONFIRMADAS vive en la migración (EXCLUDE USING gist).
   @@index([areaId, startsAt])
+  @@index([residentId, startsAt])
   @@map("reserva")
 }
 

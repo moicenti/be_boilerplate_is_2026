@@ -62,7 +62,9 @@
       "@CommonAreas": ["./src/common-areas/index.ts"],
       "@CommonAreas/*": ["./src/common-areas/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
-      "@Notificaciones/*": ["./src/notificaciones/*/index.ts"]
+      "@Notificaciones/*": ["./src/notificaciones/*/index.ts"],
+      "@Reservas": ["./src/reservas/index.ts"],
+      "@Reservas/*": ["./src/reservas/*/index.ts"]
     }
   }
 }
