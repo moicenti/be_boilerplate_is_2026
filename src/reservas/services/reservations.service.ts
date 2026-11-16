@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ReservationStatus, type Reservation, type Unit, type User } from '@PrismaClient';
+import { ReservationStatus, type Reservation, type User } from '@PrismaClient';
 import type { EnvConfig } from '@Config';
 import { ApiException } from '@Common/errors';
 import { CommonAreasService } from '@CommonAreas/services';
@@ -34,7 +34,7 @@ export class ReservationsService {
       );
     }
 
-    const unit = await this.unitOf(user);
+    const unitId = this.unitOf(user);
     const area = await this.commonAreasService.findOne(dto.areaId);
 
     if (startsAt <= new Date()) {
@@ -69,7 +69,7 @@ export class ReservationsService {
       return await this.reservationRepository.create({
         areaId: area.id,
         residentId: user.id,
-        unitId: unit.id,
+        unitId,
         startsAt,
         endsAt,
       });
@@ -85,18 +85,17 @@ export class ReservationsService {
     }
   }
 
-  async findMine(user: User): Promise<Reservation[]> {
-    const unit = await this.unitOf(user);
-    return this.reservationRepository.findAllByUnit(unit.id);
+  findMine(user: User): Promise<Reservation[]> {
+    return this.reservationRepository.findAllByUnit(this.unitOf(user));
   }
 
   async cancel(reservationId: number, user: User): Promise<Reservation> {
-    const unit = await this.unitOf(user);
+    const unitId = this.unitOf(user);
     const reservation = await this.reservationRepository.findById(reservationId);
     if (!reservation) {
       throw new ApiException(HttpStatus.NOT_FOUND, 'RESERVA_INEXISTENTE', 'La reserva no existe.');
     }
-    if (reservation.unitId !== unit.id) {
+    if (reservation.unitId !== unitId) {
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         'RECURSO_AJENO',
@@ -117,17 +116,16 @@ export class ReservationsService {
     return cancelled;
   }
 
-  // La unidad sale de la sesión (users.unit es el código de la unidad), nunca del request.
-  private async unitOf(user: User): Promise<Unit> {
-    const unit = user.unit ? await this.reservationRepository.findUnitByCode(user.unit) : null;
-    if (!unit) {
+  // La unidad sale de la sesión, nunca del request.
+  private unitOf(user: User): string {
+    if (!user.unitId) {
       throw new ApiException(
         HttpStatus.FORBIDDEN,
         'UNIDAD_NO_ASIGNADA',
         'Tu cuenta no tiene una unidad registrada; contacta a la administración.',
       );
     }
-    return unit;
+    return user.unitId;
   }
 
   private notAllowed(mensaje: string): ApiException {

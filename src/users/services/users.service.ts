@@ -7,11 +7,6 @@ import type { CreateUserDto } from '@Users/dto';
 import type { EnvConfig } from '@Config';
 import type { User } from '@PrismaClient';
 
-/**
- * Lógica de negocio de usuarios.
- *
- * No conoce Prisma: todo el acceso a datos pasa por UserRepository.
- */
 @Injectable()
 export class UsersService {
   private readonly saltRounds: number;
@@ -23,13 +18,12 @@ export class UsersService {
     this.saltRounds = configService.get('BCRYPT_SALT_ROUNDS', { infer: true });
   }
 
-  async create({ email, password, unit }: CreateUserDto): Promise<User> {
+  async create({ email, password, unitId }: CreateUserDto): Promise<User> {
     const passwordHash = await this.hashPassword(password);
 
     try {
-      return await this.userRepository.create({ email, passwordHash, unit });
+      return await this.userRepository.create({ email, passwordHash, unitId });
     } catch (error) {
-      // Traduce el error de dominio del repositorio a una excepción HTTP.
       if (error instanceof EmailAlreadyTakenError) {
         throw new ConflictException('El email ya está registrado.');
       }

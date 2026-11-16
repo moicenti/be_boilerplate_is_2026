@@ -10,7 +10,7 @@ import type {
 } from '@Paquetes/repositories';
 import type { UnidadesService } from '@Unidades/services';
 import type { CreatePackageDto, DeliverPackageDto } from '@Paquetes/dto';
-import { PackageStatus, type Unit, type User } from '@PrismaClient';
+import { PackageStatus, Role, type Unit, type User } from '@PrismaClient';
 
 const unit: Unit = {
   id: '6f1c2a4e-1b2c-4d5e-8f90-123456789abc',
@@ -36,6 +36,8 @@ const pending = {
   pickupCode: '482913',
   deliveredAt: null,
   deliveredTo: null,
+  unitId: unit.id,
+  unit: { code: 'A-202' },
 } as unknown as PackageWithRelations;
 
 const delivered = {
@@ -67,6 +69,10 @@ function setup(
       .fn()
       .mockResolvedValue({ pendingCount: 45, pendingRecipientCount: 30 }),
     carriers: vi.fn().mockResolvedValue(['DHL', 'FedEx']),
+    findPageForUnit: vi
+      .fn()
+      .mockResolvedValue({ items: [pending, delivered], total: 25 }),
+    countPendingForUnit: vi.fn().mockResolvedValue(1),
   };
   const unidadesService = {
     findById: vi.fn().mockResolvedValue(foundUnit),
@@ -215,6 +221,77 @@ describe('PaquetesService.list', () => {
 
     expect(result.totalPages).toBe(1);
     expect(result.items).toEqual([]);
+  });
+});
+
+describe('PaquetesService para residentes', () => {
+  const resident = {
+    id: 'res-id',
+    role: Role.RESIDENTE,
+    unitId: unit.id,
+  } as User;
+  const neighbor = { ...resident, unitId: 'otra-unidad' } as User;
+  const securityGuard = { ...guard, role: Role.SEGURIDAD } as User;
+
+  it('lista los paquetes de la unidad del residente con su total de pendientes', async () => {
+    const { service, packageRepository } = setup();
+
+    const result = await service.listForResident(resident, {
+      estado: PackageStatus.ENTREGADO,
+      page: 2,
+    });
+
+    expect(packageRepository.findPageForUnit).toHaveBeenCalledWith(
+      unit.id,
+      PackageStatus.ENTREGADO,
+      20,
+      20,
+    );
+    expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith(unit.id);
+    expect(result).toMatchObject({
+      page: 2,
+      total: 25,
+      totalPages: 2,
+      pendingCount: 1,
+    });
+  });
+
+  it('devuelve una lista vacía si el residente no tiene unidad', async () => {
+    const { service, packageRepository } = setup();
+
+    const result = await service.listForResident(
+      { ...resident, unitId: null } as User,
+      { page: 1 },
+    );
+
+    expect(result).toMatchObject({ items: [], total: 0, pendingCount: 0 });
+    expect(packageRepository.findPageForUnit).not.toHaveBeenCalled();
+  });
+
+  it('responde 404 si el residente abre un paquete de otra unidad', async () => {
+    const { service } = setup(unit, [pending]);
+
+    await expect(service.findOne('pkg-id', neighbor)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('muestra el paquete al residente de la unidad y a seguridad', async () => {
+    const { service } = setup(unit, [pending, pending]);
+
+    await expect(service.findOne('pkg-id', resident)).resolves.toBe(pending);
+    await expect(service.findOne('pkg-id', securityGuard)).resolves.toBe(
+      pending,
+    );
+  });
+
+  it('solo deja ver el código al residente de la unidad mientras está pendiente', () => {
+    const { service } = setup();
+
+    expect(service.canSeePickupCode(pending, resident)).toBe(true);
+    expect(service.canSeePickupCode(delivered, resident)).toBe(false);
+    expect(service.canSeePickupCode(pending, neighbor)).toBe(false);
+    expect(service.canSeePickupCode(pending, securityGuard)).toBe(false);
   });
 });
 

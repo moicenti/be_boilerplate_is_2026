@@ -51,6 +51,8 @@
       "@Unidades/*": ["./src/unidades/*/index.ts"],
       "@Paquetes": ["./src/paquetes/index.ts"],
       "@Paquetes/*": ["./src/paquetes/*/index.ts"],
+      "@Asambleas": ["./src/asambleas/index.ts"],
+      "@Asambleas/*": ["./src/asambleas/*/index.ts"],
       "@PrismaClient": ["./src/generated/prisma/client.ts"],
       "@Unidades": ["./src/unidades/index.ts"],
       "@Unidades/*": ["./src/unidades/*/index.ts"],

@@ -28,6 +28,8 @@ import {
   CreatePackageDto,
   DeliverPackageDto,
   ListPackagesQueryDto,
+  MyPackagePageResponseDto,
+  MyPackagesQueryDto,
   PackagePageResponseDto,
   PackageResponseDto,
 } from '@Paquetes/dto';
@@ -55,17 +57,43 @@ export class PaquetesController {
     };
   }
 
+  @Get('mis-paquetes')
+  @Roles(Role.RESIDENTE)
+  @ApiOperation({ summary: 'Historial de paquetes de la unidad del residente' })
+  @ApiOkResponse({ type: MyPackagePageResponseDto })
+  @ApiBadRequestResponse({ description: 'Filtros inválidos.' })
+  @ApiForbiddenResponse({ description: 'Solo residentes.' })
+  async listMine(
+    @Query() query: MyPackagesQueryDto,
+    @CurrentUser() user: User,
+  ): Promise<MyPackagePageResponseDto> {
+    const page = await this.paquetesService.listForResident(user, query);
+    return {
+      ...page,
+      items: page.items.map((pkg) => PackageResponseDto.fromEntity(pkg)),
+    };
+  }
+
   @Get(':id')
-  @Roles(Role.SEGURIDAD, Role.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Detalle de un paquete' })
+  @Roles(Role.SEGURIDAD, Role.ADMINISTRADOR, Role.RESIDENTE)
+  @ApiOperation({
+    summary: 'Detalle de un paquete',
+    description:
+      'Un residente solo accede a los paquetes de su unidad y ve el código de retiro mientras el paquete está pendiente.',
+  })
   @ApiOkResponse({ type: PackageResponseDto })
-  @ApiNotFoundResponse({ description: 'El paquete no existe.' })
+  @ApiNotFoundResponse({
+    description: 'El paquete no existe o es de otra unidad.',
+  })
   @ApiForbiddenResponse({ description: 'El rol no tiene acceso.' })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
   ): Promise<PackageResponseDto> {
-    const pkg = await this.paquetesService.findOne(id);
-    return PackageResponseDto.fromEntity(pkg);
+    const pkg = await this.paquetesService.findOne(id, user);
+    return PackageResponseDto.fromEntity(pkg, {
+      includePickupCode: this.paquetesService.canSeePickupCode(pkg, user),
+    });
   }
 
   @Post()
