@@ -39,6 +39,66 @@ const DEMO_PACKAGES: DemoPackage[] = [
   { unit: 'A-19', recipientName: 'Demo Residente', carrier: 'Estafeta', trackingReference: 'EST-629500218', pickupCode: '271846' },
 ];
 
+const DEMO_ASSEMBLIES: {
+  title: string;
+  proposal: string;
+  description: string;
+  type: 'ORDINARIA' | 'EXTRAORDINARIA';
+  meetingInDays: number;
+  published: boolean;
+  agenda: string[];
+}[] = [
+  {
+    title: 'Señalización de estacionamiento',
+    proposal: 'Pintar y señalizar los cajones de visitas',
+    description: 'Renovar la señalización horizontal del estacionamiento de visitas.',
+    type: 'EXTRAORDINARIA',
+    meetingInDays: -38,
+    published: true,
+    agenda: ['Diagnóstico de la señalización', 'Cotizaciones recibidas'],
+  },
+  {
+    title: 'Renovación de luminarias',
+    proposal: 'Cambiar luminarias del jardín a LED',
+    description: 'Sustituir las luminarias del jardín por tecnología LED para reducir consumo.',
+    type: 'EXTRAORDINARIA',
+    meetingInDays: -18,
+    published: true,
+    agenda: ['Consumo eléctrico actual', 'Propuesta de luminarias LED'],
+  },
+  {
+    title: 'Mantenimiento de la casa club',
+    proposal: 'Aprobar el mantenimiento anual de la casa club',
+    description: 'Pintura, impermeabilización y revisión eléctrica de la casa club.',
+    type: 'ORDINARIA',
+    meetingInDays: -1,
+    published: true,
+    agenda: ['Estado de la casa club', 'Presupuesto de mantenimiento'],
+  },
+  {
+    title: 'Reglamento de mascotas',
+    proposal: 'Actualizar el reglamento de mascotas en áreas comunes',
+    description: 'Definir horarios y zonas permitidas para mascotas en áreas comunes.',
+    type: 'ORDINARIA',
+    meetingInDays: 6,
+    published: true,
+    agenda: ['Quejas recibidas', 'Propuesta de reglamento'],
+  },
+  {
+    title: 'Mejora del jardín central',
+    proposal: 'Renovar el sistema de riego del jardín central',
+    description: 'Sustituir los aspersores dañados e instalar un programador de riego.',
+    type: 'EXTRAORDINARIA',
+    meetingInDays: 10,
+    published: false,
+    agenda: [
+      'Estado actual del jardín',
+      'Presentación de la propuesta de riego',
+      'Dudas y apertura de la votación',
+    ],
+  },
+];
+
 const STAFF = [
   { email: 'ricardo.soto@example.com', role: Role.SEGURIDAD },
   { email: 'laura.admin@example.com', role: Role.ADMINISTRADOR },
@@ -163,6 +223,58 @@ async function main() {
     console.log(
       `  ${folio} · ${demo.deliveredTo ? 'entregado' : demo.pickupCode} · ${demo.recipientName} (${demo.unit})`,
     );
+  }
+
+  // 8. Asambleas demo
+  const admin2 = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@example.com' } });
+  console.log('Asambleas demo:');
+  for (const demo of DEMO_ASSEMBLIES) {
+    if (await prisma.assembly.findFirst({ where: { title: demo.title } })) continue;
+
+    const [{ value }] = await prisma.$queryRaw<{ value: bigint }[]>`
+      SELECT nextval(pg_get_serial_sequence('asambleas', 'number')) AS value
+    `;
+    const number = Number(value);
+    const folio = `ASM-${new Date().getFullYear()}-${String(number).padStart(3, '0')}`;
+    const startsAt = new Date(Date.now() + demo.meetingInDays * DAY_MS);
+    await prisma.assembly.create({
+      data: {
+        number,
+        folio,
+        title: demo.title,
+        type: demo.type,
+        modality: 'PRESENCIAL',
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 90 * 60 * 1000),
+        location: 'Salón de eventos · Casa club · Los Olivos',
+        description: demo.description,
+        publishedAt: demo.published
+          ? new Date(startsAt.getTime() - 7 * DAY_MS)
+          : null,
+        createdById: admin2.id,
+        agendaItems: {
+          create: demo.agenda.map((title, position) => ({ title, position })),
+        },
+        topics: {
+          create: [
+            {
+              title: demo.proposal,
+              description: demo.description,
+              opensAt: new Date(startsAt.getTime() + 90 * 60 * 1000),
+              closesAt: new Date(startsAt.getTime() + 90 * 60 * 1000 + 3 * DAY_MS),
+              position: 0,
+              options: {
+                create: ['A favor', 'En contra', 'Abstención'].map((text, position) => ({
+                  text,
+                  position,
+                })),
+              },
+            },
+          ],
+        },
+      },
+    });
+    console.log(`  ${folio} · ${demo.title}`);
   }
 }
 
