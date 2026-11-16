@@ -217,7 +217,7 @@ model Notificacion {
   intentos  IntentoEnvio[]
 
   @@index([estado])
-  @@index([residenteId])
+  @@index([residenteId, leida, fechaCreacion(sort: Desc)], map: "idx_notif_residente")
   @@map("notificacion")
 }
 
