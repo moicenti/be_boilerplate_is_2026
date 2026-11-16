@@ -16,6 +16,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Prisma en detalle](#prisma-en-detalle)
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
+- [Cuotas y generación automática (H3)](#cuotas-y-generación-automática-h3)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -311,8 +312,14 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `POST` | `/reservas` | Bearer · `RESIDENTE` | `201` | Reserva un área para la unidad de la sesión. `400` datos inválidos, `404` `AREA_INEXISTENTE`, `409` `RESERVA_CRUZADA` (restricción de exclusión en la BD), `422` `FUERA_DE_HORARIO` (horario, bloqueo o fecha pasada) (H5) |
 | `GET` | `/reservas` | Bearer · `RESIDENTE` | `200` | Reservas de la unidad de la sesión, de la más reciente a la más antigua (H5) |
 | `PATCH` | `/reservas/{id}/cancelar` | Bearer · `RESIDENTE` | `200` | Cancela una reserva confirmada de la unidad que aún no termina; `403` `RECURSO_AJENO`, `409` `TRANSICION_INVALIDA` (H5) |
+| `POST` | `/reglas-cuota` | Bearer · `ADMINISTRADOR` | `201` | Crea una regla de cuota (ACTIVA por defecto; `estado: INACTIVA` guarda un borrador incompleto). `400` datos inválidos, `409` `REGLA_DUPLICADA`, `422` `REGLA_INCOMPLETA` (H3) |
+| `GET` | `/reglas-cuota?estado=` | Bearer · `ADMINISTRADOR` | `200` | Lista las reglas con `unidadesAplicables` (H3) |
+| `GET` | `/reglas-cuota/{id}` | Bearer · `ADMINISTRADOR` | `200` | Consulta una regla; `404` `REGLA_INEXISTENTE` (H3) |
+| `PUT` | `/reglas-cuota/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza la configuración; solo afecta periodos futuros (H3) |
+| `PATCH` | `/reglas-cuota/{id}/estado` | Bearer · `ADMINISTRADOR` | `200` | Activa, pausa o desactiva; `409` `TRANSICION_INVALIDA` si ya tiene ese estado, `422` al activar una regla incompleta (H3) |
+| `GET` | `/reglas-cuota/{id}/historial` | Bearer · `ADMINISTRADOR` | `200` | Auditoría: creación, ediciones y cambios de estado con usuario y fecha (H3) |
 
-Los endpoints de áreas responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
+Los endpoints de áreas, reservas y reglas de cuota responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 
 ### Ejemplos
 
@@ -385,6 +392,49 @@ curl -X POST $BASE/auth/logout \
 Responde `204 No Content`. Es idempotente: repetirlo con un token ya revocado también devuelve `204`, para no convertirse en un oráculo que revele qué tokens existen.
 
 ---
+
+## Cuotas y generación automática (H3)
+
+El administrador define **reglas de cuota**; una tarea diaria genera las cuotas del periodo para las unidades de cada regla ACTIVA. Código en [src/cuotas](src/cuotas).
+
+### Tablas
+
+| Tabla | Contenido |
+|---|---|
+| `cuota` | Cuota de una unidad (DB-1.1): `unidad_id`, `regla_id` (nula si se creó a mano), `concepto`, `periodo` (`AAAA-MM`), `monto` (> 0), `fecha_vencimiento`, `estado` (`PENDIENTE`, `PARCIAL`, `PAGADA`, `ANULADA`). Único `(unidad_id, regla_id, periodo)`: no hay duplicados. El saldo no se almacena; los pagos llegan con H1 |
+| `regla_cuota` | `concepto`, `tipo_monto` (`FIJO` o `POR_TIPO_UNIDAD`), `monto`, `dia_generacion` y `dia_vencimiento` (1 a 28, vencimiento ≥ generación), `alcance` (`TODAS`, `TIPO`, `TORRE`, `SELECCION`) y `alcance_valor` (qué torre o qué tipo), `politica_inactivas`, `estado` (`ACTIVA`, `PAUSADA`, `INACTIVA`), `creado_por`, `creado_en`. Una sola regla no INACTIVA por concepto (sin mayúsculas) y alcance |
+| `regla_cuota_unidad` | Unidades de una regla con alcance `SELECCION` |
+| `regla_cuota_monto_tipo` | Monto por tipo de unidad de una regla `POR_TIPO_UNIDAD` |
+| `regla_cuota_historial` | Auditoría: acción, valor anterior y nuevo, usuario y fecha |
+| `ejecucion_generacion` | Cada corrida: regla, periodo, origen (`AUTOMATICA`/`MANUAL`), usuario (nulo si es automática), inicio y fin, `creadas`, `omitidas`, `con_error` y estado (`EN_CURSO`, `COMPLETADA`, `CON_ERRORES`). Nunca dos `EN_CURSO` para la misma regla y periodo |
+| `ejecucion_error` | Unidad y causa de cada cuota que no se generó |
+
+`units` suma `tipo` (`DEPARTAMENTO`, `CASA`, `LOCAL`) y `activa`. Una unidad está **sin responsable** si no tiene ningún residente activo asignado.
+
+Una regla con cuotas no se puede eliminar (`ON DELETE RESTRICT`): solo desactivarse. Prisma no genera migraciones de reversión; la de H3 trae su [down.sql](prisma/migrations/20261115235946_h3_reglas_cuota/down.sql).
+
+### Programación
+
+- Corre todos los días a las **00:05 en `APP_TIMEZONE`** (el cron se dispara cada hora en el minuto 5 y solo trabaja si en el condominio son las 00:xx, así no depende de la zona del servidor).
+- Toma las reglas `ACTIVA` con `dia_generacion` = hoy y genera el periodo del mes actual. `PAUSADA` e `INACTIVA` no generan.
+- Cada cuota toma de la regla el concepto, el monto (fijo o el de su tipo de unidad) y vence el `dia_vencimiento` de ese mes. Editar la regla solo afecta periodos futuros: las cuotas guardan su propio monto.
+- Para simular un día sin esperar: `npm run build && npm run cuotas:generar -- 2026-12-01`.
+
+### Unidades inactivas o sin responsable (`politica_inactivas`)
+
+| Política | Efecto |
+|---|---|
+| `GENERAR` | Se genera la cuota como a cualquier otra unidad |
+| `OMITIR` (por defecto) | No se genera; cuenta como omitida |
+| `REVISAR` | No se genera; queda en `ejecucion_error` con la causa («Unidad inactiva: requiere revisión.») y la ejecución termina `CON_ERRORES` |
+
+### Comportamiento ante fallos
+
+- **Idempotencia:** `INSERT … ON CONFLICT DO NOTHING` sobre `(unidad_id, regla_id, periodo)`; las cuotas que ya existían cuentan como omitidas. Ejecutar dos veces el mismo periodo no duplica.
+- **Lotes de 100 unidades**, cada uno en su transacción (insertar cuotas, registrar errores y sumar contadores). Si un lote falla, se reintenta unidad por unidad: la que falla queda en `ejecucion_error` con su causa y las demás se generan.
+- **Concurrencia:** un índice único parcial impide dos ejecuciones `EN_CURSO` para la misma regla y periodo.
+- **Reanudación:** si el proceso se cae, su ejecución queda `EN_CURSO`. Pasados 30 minutos se considera interrumpida: la tarea del día siguiente la cierra como `CON_ERRORES` y genera solo lo faltante del periodo.
+- Una regla que falla no detiene a las demás.
 
 ## Arquitectura por capas
 
@@ -552,3 +602,4 @@ Cada carpeta de capa incluye un `index.ts` que reexporta sus elementos, de modo 
 | `prisma:studio` | Abre Prisma Studio |
 | `db:seed` | Carga el usuario demo |
 | `db:reset` | Resetea la base y vuelve a migrar |
+| `cuotas:generar` | Ejecuta la generación de cuotas como si fueran las 00:05 de una fecha (`npm run cuotas:generar -- AAAA-MM-DD`; requiere `build`) |

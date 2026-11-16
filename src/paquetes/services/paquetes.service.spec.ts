@@ -10,13 +10,21 @@ import type {
 } from '@Paquetes/repositories';
 import type { UnidadesService } from '@Unidades/services';
 import type { CreatePackageDto, DeliverPackageDto } from '@Paquetes/dto';
-import { PackageStatus, Role, type Unit, type User } from '@PrismaClient';
+import {
+  PackageStatus,
+  Role,
+  UnitType,
+  type Unit,
+  type User,
+} from '@PrismaClient';
 
 const unit: Unit = {
   id: '6f1c2a4e-1b2c-4d5e-8f90-123456789abc',
   code: 'A-202',
   tower: 'Torre A',
   description: 'Torre A, departamento 202',
+  type: UnitType.DEPARTAMENTO,
+  active: true,
   createdAt: new Date(),
 };
 

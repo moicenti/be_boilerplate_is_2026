@@ -63,7 +63,9 @@
       "@Visitas": ["./src/visitas/index.ts"],
       "@Visitas/*": ["./src/visitas/*/index.ts"]
       "@Reservas": ["./src/reservas/index.ts"],
-      "@Reservas/*": ["./src/reservas/*/index.ts"]
+      "@Reservas/*": ["./src/reservas/*/index.ts"],
+      "@Cuotas": ["./src/cuotas/index.ts"],
+      "@Cuotas/*": ["./src/cuotas/*/index.ts"]
     }
   }
 }

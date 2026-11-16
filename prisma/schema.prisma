@@ -31,8 +31,8 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
-  unitId String? @map("unit_id") @db.Uuid
-  unit   Unit?   @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unitId        String?        @map("unit_id") @db.Uuid
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   role Role @default(RESIDENTE)
 
@@ -44,17 +44,20 @@ model User {
   receivedPackages  Package[] @relation("PackageReceivedBy")
   deliveredPackages Package[] @relation("PackageDeliveredBy")
 
-  deletedCommonAreas CommonArea[]      @relation("CommonAreaDeletedBy")
+  deletedCommonAreas CommonArea[]       @relation("CommonAreaDeletedBy")
   commonAreaChanges  CommonAreaChange[]
-  commonAreaBlocks   CommonAreaBlock[] @relation("CommonAreaBlockCreatedBy")
+  commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
+  feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
+  feeRuleChanges     FeeRuleChange[]
+  generationRuns     GenerationRun[]
 
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
 
   preferenciasNotificacion PreferenciaNotificacion[]
-  notificacionesRecibidas  Notificacion[]           @relation("NotificacionesRecibidas")
-  lotesEmitidos            LoteNotificacion[]       @relation("LotesEmitidos")
+  notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
+  lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
 
   preAutorizacionesCreadas PreAutorizacion[] @relation("PreAutorizacionesCreadas")
   createdAssemblies Assembly[] @relation("AssemblyCreatedBy")
@@ -81,6 +84,9 @@ model Unit {
   code        String   @unique
   tower       String
   description String
+  type        UnitType @default(DEPARTAMENTO) @map("tipo")
+  // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
+  active      Boolean  @default(true) @map("activa")
   createdAt   DateTime @default(now()) @map("created_at")
   users          User[]
   packages       Package[]
@@ -90,6 +96,12 @@ model Unit {
   reservations   Reservation[]
 
   @@map("units")
+}
+
+enum UnitType {
+  DEPARTAMENTO
+  CASA
+  LOCAL
 }
 
 enum PackageStatus {

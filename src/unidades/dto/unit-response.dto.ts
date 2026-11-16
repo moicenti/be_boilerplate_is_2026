@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { Unit } from '@PrismaClient';
+import { UnitType, type Unit } from '@PrismaClient';
 
 export class UnitResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -14,12 +14,20 @@ export class UnitResponseDto {
   @ApiProperty({ example: 'Torre A, departamento 304' })
   description!: string;
 
+  @ApiProperty({ enum: UnitType, example: UnitType.DEPARTAMENTO })
+  type!: UnitType;
+
+  @ApiProperty({ example: true })
+  active!: boolean;
+
   static fromEntity(unit: Unit): UnitResponseDto {
     return {
       id: unit.id,
       code: unit.code,
       tower: unit.tower,
       description: unit.description,
+      type: unit.type,
+      active: unit.active,
     };
   }
 }
