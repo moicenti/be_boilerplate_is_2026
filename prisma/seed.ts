@@ -16,11 +16,27 @@ const UNITS = [
   { code: 'B-402', tower: 'Torre B', description: 'Torre B, departamento 402' },
 ];
 
-const DEMO_PACKAGES = [
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type DemoPackage = {
+  unit: string;
+  recipientName: string;
+  carrier: string;
+  trackingReference: string;
+  pickupCode: string;
+  receivedDaysAgo?: number;
+  deliveredTo?: string;
+};
+
+const DEMO_PACKAGES: DemoPackage[] = [
   { unit: 'A-304', recipientName: 'Ana Martínez', carrier: 'DHL', trackingReference: 'DHL-5521983', pickupCode: '482913' },
   { unit: 'B-103', recipientName: 'Elena Ruiz', carrier: 'FedEx', trackingReference: 'FDX-7730214', pickupCode: '105627' },
   { unit: 'B-205', recipientName: 'Jorge Salas', carrier: 'Estafeta', trackingReference: 'EST-629483715', pickupCode: '739450' },
   { unit: 'B-402', recipientName: 'Sofía Herrera', carrier: 'DHL', trackingReference: 'DHL-5522107', pickupCode: '260318' },
+  { unit: 'A-19', recipientName: 'Demo Residente', carrier: 'Amazon', trackingReference: 'AMZ-1190044', pickupCode: '318204', receivedDaysAgo: 9, deliveredTo: 'Demo Residente' },
+  { unit: 'A-19', recipientName: 'Demo Residente', carrier: 'FedEx', trackingReference: 'FDX-7731188', pickupCode: '640517', receivedDaysAgo: 4, deliveredTo: 'Carmen López' },
+  { unit: 'A-19', recipientName: 'Demo Residente', carrier: 'DHL', trackingReference: 'DHL-5523360', pickupCode: '905731', receivedDaysAgo: 1 },
+  { unit: 'A-19', recipientName: 'Demo Residente', carrier: 'Estafeta', trackingReference: 'EST-629500218', pickupCode: '271846' },
 ];
 
 const STAFF = [
@@ -105,19 +121,23 @@ async function main() {
   }
 
   // 7. Paquetes demo
-  if ((await prisma.package.count()) > 0) return;
-
   const guard = await prisma.user.findUniqueOrThrow({
     where: { email: 'ricardo.soto@example.com' },
   });
   console.log('Paquetes demo (folio · código de retiro):');
   for (const demo of DEMO_PACKAGES) {
+    const exists = await prisma.package.findFirst({
+      where: { trackingReference: demo.trackingReference },
+    });
+    if (exists) continue;
+
     const unit = await prisma.unit.findUniqueOrThrow({ where: { code: demo.unit } });
     const [{ value }] = await prisma.$queryRaw<{ value: bigint }[]>`
       SELECT nextval(pg_get_serial_sequence('packages', 'number')) AS value
     `;
     const number = Number(value);
     const folio = `PAQ-${new Date().getFullYear()}-${String(number).padStart(4, '0')}`;
+    const receivedAt = new Date(Date.now() - (demo.receivedDaysAgo ?? 0) * DAY_MS);
     await prisma.package.create({
       data: {
         number,
@@ -125,13 +145,24 @@ async function main() {
         pickupCode: demo.pickupCode,
         unitId: unit.id,
         receivedById: guard.id,
+        receivedAt,
         recipientName: demo.recipientName,
         carrier: demo.carrier,
         trackingReference: demo.trackingReference,
         description: '1 caja mediana de cartón, cerrada.',
+        ...(demo.deliveredTo
+          ? {
+              status: 'ENTREGADO' as const,
+              deliveredTo: demo.deliveredTo,
+              deliveredById: guard.id,
+              deliveredAt: new Date(receivedAt.getTime() + 5 * 60 * 60 * 1000),
+            }
+          : {}),
       },
     });
-    console.log(`  ${folio} · ${demo.pickupCode} · ${demo.recipientName} (${demo.unit})`);
+    console.log(
+      `  ${folio} · ${demo.deliveredTo ? 'entregado' : demo.pickupCode} · ${demo.recipientName} (${demo.unit})`,
+    );
   }
 }
 
