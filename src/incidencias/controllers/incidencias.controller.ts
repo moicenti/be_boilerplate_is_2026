@@ -16,14 +16,14 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { Role, type User } from '@PrismaClient';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { IncidenciasService } from '../services/index.js';
+import { IncidenciasService } from '@Incidencias/services';
 import {
   AsignarIncidenciaDto,
   CreateIncidenciaDto,
   FilterIncidenciaDto,
   ResolverIncidenciaDto,
   RechazarResolucionDto,
-} from '../dto/index.js';
+} from '@Incidencias/dto';
 
 @Controller('incidencias')
 export class IncidenciasController {

@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PreautorizacionRepository } from '../repositories/index.js';
-import { CreatePreautorizacionDto } from '../dto/index.js';
+import { CreatePreautorizacionDto } from '@Visitas/dto/';
 import type { Unit } from '@PrismaClient';
 
 const MAX_VIGENCIA_HORAS = 24;

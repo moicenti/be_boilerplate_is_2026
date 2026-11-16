@@ -11,12 +11,12 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificacionesModule } from '@Notificaciones';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { IncidenciasModule } from './incidencias/incidencias.module.js';
+import { IncidenciasModule } from '@Incidencias';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
 import { CommonAreasModule } from '@CommonAreas';
 import { AnunciosModule } from './anuncio/index.js';
-import { VisitasModule } from './visitas/visitas.module.js';
+import { VisitasModule } from '@Visitas';
 
 @Module({
   imports: [

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import { CreatePreautorizacionDto } from '../dto/index.js';
+import { CreatePreautorizacionDto } from '@Visitas/dto/';
 
 @Injectable()
 export class PreautorizacionRepository {

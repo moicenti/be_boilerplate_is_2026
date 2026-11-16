@@ -7,8 +7,8 @@ import {
   Post,
 } from '@nestjs/common';
 import { CurrentUser } from '@Auth/decorators';
-import { PreautorizacionService } from '../services/index.js';
-import { CreatePreautorizacionDto } from '../dto/index.js';
+import { PreautorizacionService } from '@Visitas/services/';
+import { CreatePreautorizacionDto } from '@Visitas/dto/';
 import type { User } from '@PrismaClient';
 
 @Controller('preautorizaciones')
