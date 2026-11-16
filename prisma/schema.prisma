@@ -48,9 +48,9 @@ model User {
   commonAreaChanges  CommonAreaChange[]
   commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
-  feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
-  feeRuleChanges     FeeRuleChange[]
-  generationRuns     GenerationRun[]
+  // feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
+  // feeRuleChanges     FeeRuleChange[]
+  // generationRuns     GenerationRun[]
 
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
