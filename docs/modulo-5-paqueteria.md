@@ -1,6 +1,6 @@
 # Módulo 5: Paquetería
 
-Responsable: Cristian Rodríguez · Historia implementada: **H13. Registrar la llegada y la entrega de paquetes** (IST-14).
+Responsable: Cristian Rodríguez · Historias implementadas: **H13. Registrar la llegada y la entrega de paquetes** (IST-14) y **H15. Consultar mi historial de paquetes**.
 
 Este documento describe el modelo de datos, los endpoints, los flujos, el estado en el frontend y las decisiones de arquitectura del módulo, con su justificación.
 
@@ -18,7 +18,9 @@ Este documento describe el modelo de datos, los endpoints, los flujos, el estado
 
 ## 1. Alcance
 
-El personal de seguridad registra la llegada de cada paquete a la caseta y, después, su entrega a una persona de la unidad destinataria. Un paquete solo se entrega si quien lo recoge presenta el **código de retiro de 6 dígitos** asignado al registrarlo, para que nunca se entregue a la persona equivocada.
+El personal de seguridad registra la llegada de cada paquete a la caseta y, después, su entrega a una persona de la unidad destinataria. Un paquete solo se entrega si quien lo recoge presenta el **código de retiro de 6 dígitos** asignado al registrarlo, para que nunca se entregue a la persona equivocada. Los residentes consultan el historial de paquetes de su unidad y ven el código de los que siguen pendientes.
+
+### H13
 
 | Task | Descripción | Estado |
 | --- | --- | --- |
@@ -32,6 +34,18 @@ El personal de seguridad registra la llegada de cada paquete a la caseta y, desp
 | FE-13.3 | Flujo de entrega | Hecha |
 | QA-13.1 | Pruebas de aceptación | Ver [QA-13.1](qa/QA-13.1.md) |
 
+### H15
+
+| Task | Descripción | Estado |
+| --- | --- | --- |
+| BE-15.1 | `GET /api/v1/paquetes/mis-paquetes` | Hecha |
+| BE-15.2 | `GET /api/v1/paquetes/{id}` con acceso de residentes de la unidad | Hecha |
+| BE-15.3 | Pruebas de integración | Hecha |
+| FE-15.1 | Pantalla "Mis paquetes" | Hecha |
+| QA-15.1 | Pruebas de aceptación | Ver [QA-15.1](qa/QA-15.1.md) |
+
+H15 incluye además la **pantalla de detalle del paquete para el residente** (adelanto de FE-14.1 de H14), porque el criterio "un paquete de otra unidad no muestra su información al abrirlo" necesita una página de detalle.
+
 Como base para el módulo se agregaron también los **roles de usuario** y la **tabla de unidades**, que no existían en el boilerplate y que otros módulos también necesitan.
 
 ## 2. Modelo de datos
@@ -39,14 +53,15 @@ Como base para el módulo se agregaron también los **roles de usuario** y la **
 ```mermaid
 erDiagram
     units ||--o{ packages : "recibe"
+    units |o--o{ users : "residen en"
     users ||--o{ packages : "recibió (seguridad)"
     users |o--o{ packages : "entregó (seguridad)"
 
     users {
         uuid id PK
         string email UK
-        string unit "código de unidad (H7)"
-        Role role "RESIDENTE | ADMINISTRADOR | SEGURIDAD"
+        uuid unit_id FK "nullable: el personal no tiene unidad"
+        Role role "RESIDENTE | ADMINISTRADOR | SEGURIDAD | MANTENIMIENTO"
     }
 
     units {
@@ -108,7 +123,7 @@ Se agregaron `trackingReference` (referencia o guía) y `notes` (observaciones) 
 | Folio único | Índice único sobre `folio` |
 | El paquete no se pierde | Llaves foráneas con `ON DELETE RESTRICT`: no se puede borrar una unidad ni un usuario con paquetes |
 
-Migraciones: `20261107204035_agrega_roles_y_unidades` y `20261107205048_crea_tabla_paquetes`.
+Al integrar los módulos del equipo en `develop`, las migraciones se reorganizaron: el enum `Role` se crea en `20261108061054_areas_comunes`, las tablas `units` y `packages` en `20261109040915_h23_notificaciones`, y las dos reglas `CHECK` de paquetes en `20261109060000_paquetes_restricciones`. Después, el equipo convirtió `User.unit` en la llave foránea `unit_id` hacia `units`.
 
 ## 3. Endpoints
 
@@ -118,13 +133,16 @@ Base: `/api/v1`. Todas las rutas requieren `Authorization: Bearer <token>`. La d
 | --- | --- | --- | --- |
 | `GET` | `/unidades` | Seguridad, Administración | 200, 401, 403 |
 | `GET` | `/paquetes` | Seguridad | 200, 400, 401, 403 |
-| `GET` | `/paquetes/{id}` | Seguridad, Administración | 200, 400, 401, 403, 404 |
+| `GET` | `/paquetes/mis-paquetes` | Residente | 200, 400, 401, 403 |
+| `GET` | `/paquetes/{id}` | Seguridad, Administración, Residente (solo su unidad) | 200, 400, 401, 403, 404 |
 | `POST` | `/paquetes` | Seguridad | 201, 400, 401, 403, 404 |
 | `PATCH` | `/paquetes/{id}/entrega` | Seguridad | 200, 400, 401, 403, 404, 409, 422 |
 
 No existe ninguna ruta `DELETE`: los paquetes no se eliminan.
 
-**Ninguna respuesta incluye el código de retiro.** Solo lo conocerá el residente, a través del aviso de H14.
+**El código de retiro solo aparece en `GET /paquetes/{id}`, cuando lo consulta un residente de la unidad del paquete y el paquete sigue pendiente.** Ninguna otra respuesta lo incluye: ni los listados, ni el detalle para Seguridad o Administración, ni el detalle de un paquete ya entregado.
+
+`mis-paquetes` se declara antes que `{id}` en el controlador; si no, Nest intentaría leer "mis-paquetes" como un id y respondería 400.
 
 ### `POST /paquetes`: registrar llegada
 
@@ -174,6 +192,23 @@ No existe ninguna ruta `DELETE`: los paquetes no se eliminan.
 
 La respuesta incluye `items`, `page`, `pageSize`, `total`, `totalPages`, `pendingCount` (total de pendientes), `pendingRecipientCount` (destinatarios distintos con pendientes) y `carriers` (transportistas registrados, para el filtro). Los pendientes se ordenan del más antiguo al más reciente.
 
+### `GET /paquetes/mis-paquetes`: historial del residente
+
+| Parámetro | Descripción |
+| --- | --- |
+| `estado` | Opcional: `PENDIENTE_RETIRO` o `ENTREGADO`. Sin él se listan todos |
+| `page` | Página (20 paquetes por página) |
+
+Devuelve los paquetes de **la unidad del residente autenticado**, del más reciente al más antiguo: `items`, `page`, `pageSize`, `total`, `totalPages` y `pendingCount` (pendientes de su unidad, sin importar el filtro). Los entregados incluyen `deliveredAt` y `deliveredTo`. Todos los residentes de una misma unidad ven el mismo historial.
+
+### `GET /paquetes/{id}`: detalle
+
+| Quién consulta | Respuesta |
+| --- | --- |
+| Seguridad o Administración | 200 con el paquete, sin código de retiro |
+| Residente de la unidad del paquete | 200, con `pickupCode` mientras está pendiente |
+| Residente de otra unidad | **404** "El paquete no existe." |
+
 ## 4. Flujos
 
 ### Registro de llegada
@@ -216,17 +251,35 @@ flowchart TD
     M -- Sí --> N[200: vuelve al listado con el aviso Entrega registrada]
 ```
 
+### Consulta del residente
+
+```mermaid
+flowchart TD
+    A[Residente abre Paquetes] --> B[GET /api/v1/paquetes/mis-paquetes]
+    B --> C[Paquetes de su unidad, del más reciente al más antiguo, con el total de pendientes]
+    C --> D[Abre un paquete: GET /api/v1/paquetes/id]
+    D --> E{¿El paquete es de su unidad?}
+    E -- No --> F[404: pantalla No tienes acceso a este paquete]
+    E -- Sí --> G{¿Está pendiente?}
+    G -- Sí --> H[Detalle con su código de retiro y los pasos para recogerlo]
+    G -- No --> I[Detalle con la fecha de entrega y quién lo recibió, sin código]
+```
+
 ## 5. Frontend
 
 ### Pantallas
 
-| Ruta | Task | Contenido |
-| --- | --- | --- |
-| `/paquetes` | FE-13.2 | Contador de pendientes, búsqueda, filtro por transportista, tabla paginada y estados de carga, error (con reintento) y vacío |
-| `/paquetes/nuevo` | FE-13.1 | Formulario con selector de unidades, resumen en vivo y confirmación con el folio generado |
-| `/paquetes/{id}/entrega` | FE-13.3 | Datos del paquete, código de retiro y nombre de quien recoge; mensajes para 409 y 422; botón deshabilitado durante el envío |
+| Ruta | Rol | Task | Contenido |
+| --- | --- | --- | --- |
+| `/paquetes` | Seguridad | FE-13.2 | Contador de pendientes, búsqueda, filtro por transportista, tabla paginada y estados de carga, error (con reintento) y vacío |
+| `/paquetes` | Residente | FE-15.1 | "Mis paquetes": pestañas Todos / Pendiente de retiro / Entregado, contador de pendientes, fecha de entrega y receptor, paginación y estados de carga, error y vacío |
+| `/paquetes/nuevo` | Seguridad | FE-13.1 | Formulario con selector de unidades, resumen en vivo y confirmación con el folio generado |
+| `/paquetes/{id}` | Residente | FE-14.1 (adelanto) | Detalle con código de retiro y botón para copiarlo, seguimiento y pasos para recogerlo; "No tienes acceso a este paquete" ante 404 |
+| `/paquetes/{id}/entrega` | Seguridad | FE-13.3 | Datos del paquete, código de retiro y nombre de quien recoge; mensajes para 409 y 422; botón deshabilitado durante el envío |
 
-Las pantallas usan el layout de `(dashboard)` del módulo de incidencias (H7). El `Sidebar` y el `Header` muestran el menú "Operación de caseta" al rol Seguridad, y para los demás roles se ven igual que antes. El layout de `/paquetes` revisa el rol en el servidor y muestra "No tienes acceso a esta sección" a cualquier otro rol.
+Las pantallas usan el layout de `(dashboard)` del módulo de incidencias. El `Sidebar` muestra "Operación de caseta" a Seguridad y el enlace "Paquetes" al residente; "Incidencias" y "Paquetes" se resaltan según la página actual.
+
+**Cada página revisa el rol en el servidor.** `/paquetes` muestra una pantalla distinta según el rol (pendientes de la caseta o historial de la unidad), y las demás muestran "No tienes acceso a esta sección" a los roles que no corresponden. Así una misma ruta sirve a Seguridad y al residente, como en el diseño ("Mi comunidad > Paquetes"), y el enlace del aviso de H14 (`/paquetes/{id}`) lleva directo al detalle.
 
 ### Comunicación con el backend
 
@@ -271,7 +324,7 @@ Los módulos `paquetes` y `unidades` siguen las capas del boilerplate: `controll
 ### 6.3 Roles y unidades sin romper el módulo de incidencias
 
 - **`User.role`** tiene valor por defecto `RESIDENTE`: los usuarios existentes y el registro por `POST /users` siguen funcionando igual.
-- **La tabla `units` es independiente.** `User.unit` (texto, de H7) no se convirtió en llave foránea, porque eso cambiaría el registro de usuarios. Unirlas queda como decisión del equipo.
+- **La tabla `units` nació independiente** para no cambiar el registro de usuarios de H7. Después el equipo unió las dos con la llave foránea `users.unit_id`, y H15 compara la unidad del residente con la del paquete por ese id.
 
 ### 6.4 Código de retiro de 6 dígitos guardado en texto
 
@@ -279,7 +332,7 @@ El residente necesita ver su código en el aviso (H14) y en el detalle del paque
 
 La protección real está en otros puntos:
 - Se genera con `crypto.randomInt`, que no es predecible.
-- Nunca aparece en ninguna respuesta de la API.
+- Solo lo recibe el residente de la unidad, en el detalle de un paquete pendiente (ver 6.11).
 - Solo Seguridad puede intentar una entrega, así que nadie de afuera puede probar códigos.
 - Se compara en tiempo constante (`timingSafeEqual`).
 - Deja de servir en cuanto el paquete se entrega.
@@ -314,20 +367,30 @@ Las pruebas de integración usan `<base>_test`, que se crea y se migra sola ante
 
 La configuración de la app (prefijo `/api/v1` y `ValidationPipe`) se extrajo a `src/app.setup.ts`, para que `main.ts` y las pruebas levanten la aplicación exactamente igual.
 
+### 6.11 Paquete de otra unidad: 404 y no 403
+
+Cuando un residente abre un paquete que no es de su unidad, la API responde **404 "El paquete no existe."**, igual que si el id no existiera. Un 403 confirmaría que ese paquete existe y es de otra unidad; con 404 cambiar el enlace no revela nada. Es lo que pide el criterio de H15 y lo que muestra el diseño ("404 · Paquete no disponible").
+
+### 6.12 Código de retiro visible solo para quien lo necesita
+
+El servicio decide si la respuesta lleva el código (`canSeePickupCode`): solo cuando quien consulta es residente, el paquete es de su unidad y sigue pendiente. La lista "Mis paquetes" no lo incluye; se ve al abrir el detalle, como en el diseño. Al entregarse, el código deja de mostrarse porque ya no sirve.
+
 ## 7. Pruebas
 
 ```bash
-npm test           # unitarias (17)
-npm run test:e2e   # integración (23), requiere Postgres levantado
+npm test           # unitarias
+npm run test:e2e   # integración, requiere Postgres levantado
 ```
 
 | Tipo | Archivo | Qué cubre |
 | --- | --- | --- |
 | Unitarias | `src/auth/guards/roles.guard.spec.ts` | Rutas sin `@Roles`, públicas, rol permitido, rol no permitido y sin usuario |
-| Unitarias | `src/paquetes/services/paquetes.service.spec.ts` | Folio, código de 6 dígitos, unidad inexistente, entrega correcta, 422, 409, entrega simultánea, 404 y paginación |
-| Integración | `test/paquetes.e2e-spec.ts` | Registro, folios en paralelo, unidad inexistente, campos obligatorios, entrega correcta, código incorrecto, doble entrega, entrega simultánea, ausencia de `DELETE`, detalle, listado, paginación y roles (403 y 401) |
+| Unitarias | `src/paquetes/services/paquetes.service.spec.ts` | Folio, código de 6 dígitos, unidad inexistente, entrega correcta, 422, 409, entrega simultánea, 404, paginación; historial por unidad, residente sin unidad, 404 de otra unidad y cuándo se ve el código |
+| Integración | `test/paquetes.e2e-spec.ts` | H13: registro, folios en paralelo, unidad inexistente, campos obligatorios, entrega correcta, código incorrecto, doble entrega, entrega simultánea, ausencia de `DELETE`, listado, paginación y roles. H15: historial solo de la unidad y en orden, mismo historial para todos los residentes de la unidad, datos de entrega, filtro por estado con contador, paginación, estado inválido, acceso por rol, código solo para el residente de la unidad mientras está pendiente y 404 al abrir un paquete de otra unidad |
 
-Las pruebas de aceptación con los criterios de negocio están en [QA-13.1](qa/QA-13.1.md).
+Al cerrar H15 pasaban las 35 pruebas de integración del proyecto y las 82 unitarias.
+
+Las pruebas de aceptación con los criterios de negocio están en [QA-13.1](qa/QA-13.1.md) y [QA-15.1](qa/QA-15.1.md).
 
 ## 8. Datos de prueba
 
@@ -336,19 +399,21 @@ Las pruebas de aceptación con los criterios de negocio están en [QA-13.1](qa/Q
 | Correo | Rol |
 | --- | --- |
 | `ricardo.soto@example.com` | Seguridad |
-| `laura.admin@example.com` | Administración |
+| `admin@example.com` y `laura.admin@example.com` | Administración |
 | `demo@example.com` | Residente (A-19) |
 | `otro@example.com` | Residente (A-20) |
 
-Si no hay paquetes, también crea cuatro pendientes con códigos conocidos e imprime en la terminal su folio y código, para poder probar la entrega.
+También crea paquetes demo, cada uno solo si no existe (se identifica por su guía), e imprime en la terminal su folio y código:
+
+| Unidad | Paquetes |
+| --- | --- |
+| A-304, B-103, B-205, B-402 | Uno pendiente en cada una, para probar la entrega desde Seguridad |
+| A-19 (`demo@example.com`) | Dos pendientes y dos entregados, para probar "Mis paquetes" |
 
 ## 9. Pendientes y limitaciones conocidas
 
 | Tema | Detalle |
 | --- | --- |
-| `GET /paquetes/{id}` | Hoy es para Seguridad y Administración. BE-15.2 lo abrirá a los residentes de la unidad del paquete |
-| `User.unit` y `units` | No están unidas por llave foránea; decisión pendiente del equipo junto con H7 |
-| Personal sin unidad | Como `User.unit` es obligatorio en H7, los usuarios de Seguridad y Administración tienen `unit` vacío. Lo ideal sería hacerlo opcional |
 | Búsqueda con tildes | La búsqueda no distingue mayúsculas pero sí tildes: "martinez" no encuentra "Martínez" |
+| Aviso al residente | El detalle ya existe; el aviso que enlaza a él es de H14 (BE-14.1) y usará `NotificacionesService` del Módulo 9 |
 | Destinatario | Se elige la unidad y se escribe el nombre; no hay búsqueda de residentes porque los usuarios no tienen nombre registrado |
-| Avisos al residente | Corresponden a H14 y dependen de `NotificacionesService` del Módulo 9 |
