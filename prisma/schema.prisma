@@ -56,6 +56,8 @@ model User {
   notificacionesRecibidas  Notificacion[]           @relation("NotificacionesRecibidas")
   lotesEmitidos            LoteNotificacion[]       @relation("LotesEmitidos")
 
+    preAutorizacionesCreadas PreAutorizacion[] @relation("PreAutorizacionesCreadas")
+
   @@map("users")
 }
 
@@ -82,7 +84,8 @@ model Unit {
   users          User[]
   packages       Package[]
   notificaciones Notificacion[]
-
+  preAutorizaciones PreAutorizacion[]
+  
   @@map("units")
 }
 
@@ -454,4 +457,34 @@ model LecturaComunicado {
 
   @@unique([comunicadoId, residenteId])
   @@map("lectura_comunicado")
+}
+
+enum EstadoPreAutorizacion {
+  VIGENTE
+  USADA
+  CANCELADA
+  EXPIRADA
+}
+
+model PreAutorizacion {
+  id              String                @id @default(uuid()) @db.Uuid
+  codigo          String                @unique
+  nombreVisitante String                @map("nombre_visitante")
+  documento       String
+  motivo          String?
+  acompanantes    Int                   @default(0)
+  inicio          DateTime              @db.Timestamptz
+  fin             DateTime              @db.Timestamptz
+  estado          EstadoPreAutorizacion @default(VIGENTE)
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Cascade)
+
+  residenteId String @map("residente_id") @db.Uuid
+  residente   User   @relation("PreAutorizacionesCreadas", fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@index([documento])
+  @@index([estado])
+  @@map("pre_autorizaciones")
 }
