@@ -16,6 +16,8 @@ export interface EnvConfig {
   BCRYPT_SALT_ROUNDS: number;
   /** Zona horaria IANA en la que se interpretan los horarios de las áreas. */
   APP_TIMEZONE: string;
+  /** Espera de la pasarela de pago simulada (H1), en milisegundos. */
+  PAGO_SIMULADO_ESPERA_MS: number;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -55,6 +57,23 @@ function readInt(
   return parsed;
 }
 
+function readNonNegativeInt(
+  raw: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
+  const value = raw[key];
+  if (value === undefined || value === '') return fallback;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(
+      `La variable de entorno ${key} debe ser un entero mayor o igual a 0.`,
+    );
+  }
+  return parsed;
+}
+
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const missing = requiredVars.filter((key) => !raw[key]);
   if (missing.length > 0) {
@@ -89,5 +108,6 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
     APP_TIMEZONE: timezone,
+    PAGO_SIMULADO_ESPERA_MS: readNonNegativeInt(raw, 'PAGO_SIMULADO_ESPERA_MS', 5000),
   };
 }

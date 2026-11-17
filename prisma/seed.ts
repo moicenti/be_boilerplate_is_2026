@@ -276,6 +276,50 @@ async function main() {
     });
     console.log(`  ${folio} · ${demo.title}`);
   }
+
+  // 9. Cuotas y pagos demo (H1): en A-19 una pagada, una con pago parcial y una pendiente
+  // (los datos de QA-1.1); en A-20, una pendiente de otra unidad.
+  const demoUnitId = unitByCode.get('A-19');
+  const otherUnitId = unitByCode.get('A-20');
+  if (demoUnitId && otherUnitId && (await prisma.fee.count({ where: { unitId: demoUnitId } })) === 0) {
+    // Periodos relativos al mes actual, con vencimiento el día 10.
+    const monthOffset = (offset: number) => {
+      const now = new Date();
+      const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 10));
+      return { period: month.toISOString().slice(0, 7), dueDate: month };
+    };
+    const fee = (unitId: string, offset: number) =>
+      prisma.fee.create({
+        data: { unitId, concept: 'Mantenimiento', amount: 100, ...monthOffset(offset) },
+      });
+
+    const paid = await fee(demoUnitId, -2);
+    const partial = await fee(demoUnitId, -1);
+    const pending = await fee(demoUnitId, 0);
+    await fee(otherUnitId, 0);
+
+    await prisma.payment.create({
+      data: {
+        unitId: demoUnitId,
+        userId: user.id,
+        amount: 140,
+        reference: 'DEMO-SEED-0001',
+        allocations: {
+          create: [
+            { feeId: paid.id, amount: 100 },
+            { feeId: partial.id, amount: 40 },
+          ],
+        },
+      },
+    });
+    await prisma.fee.update({ where: { id: paid.id }, data: { status: 'PAGADA' } });
+    await prisma.fee.update({ where: { id: partial.id }, data: { status: 'PARCIAL' } });
+
+    console.log(
+      `Cuotas demo (A-19): ${paid.period} pagada, ${partial.period} parcial (saldo 60.00), ` +
+        `${pending.period} pendiente · saldo total 160.00`,
+    );
+  }
 }
 
 try {
