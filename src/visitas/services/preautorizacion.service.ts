@@ -79,4 +79,9 @@ export class PreautorizacionService {
     }
     return pre;
   }
+
+  async buscar(query: string) {
+  return this.repo.buscar(query);
+}
+
 }
