@@ -802,3 +802,38 @@ model VotingOption {
   @@unique([topicId, text])
   @@map("opciones_votacion")
 }
+
+
+enum EstadoVisita {
+  DENTRO
+  DENTRO_SIN_AUTORIZACION
+  SALIO
+}
+
+model VisitaActiva {
+  id        String   @id @default(uuid()) @db.Uuid
+  nombreVisitante String @map("nombre_visitante")
+  documento String
+  acompanantes Int @default(0)
+  motivo    String?  // solo para "sin autorización"
+  estado    EstadoVisita
+  entrada   DateTime @default(now()) @db.Timestamptz
+  salida    DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at")
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  preautorizacionId String? @map("preautorizacion_id") @db.Uuid @unique
+  preautorizacion   PreAutorizacion? @relation(fields: [preautorizacionId], references: [id], onDelete: SetNull)
+
+  registradoPorId String @map("registrado_por_id") @db.Uuid
+  registradoPor   User   @relation("VisitasRegistradas", fields: [registradoPorId], references: [id], onDelete: Restrict)
+
+  salidaRegistradaPorId String? @map("salida_registrada_por_id") @db.Uuid
+  salidaRegistradaPor   User?  @relation("SalidasRegistradas", fields: [salidaRegistradaPorId], references: [id], onDelete: SetNull)
+
+  @@index([documento, estado])
+  @@index([estado])
+  @@map("visitas_activas")
+}

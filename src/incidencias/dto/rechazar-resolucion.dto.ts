@@ -2,7 +2,12 @@ import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RechazarResolucionDto {
-  @ApiProperty({ minLength: 10, maxLength: 200 })
+  @ApiProperty({
+    example: 'La fuga sigue activa, el área no quedó seca.',
+    minLength: 10,
+    maxLength: 200,
+    description: 'Motivo del rechazo',
+  })
   @IsString()
   @IsNotEmpty({ message: 'El comentario es obligatorio' })
   @MinLength(10, { message: 'El comentario debe tener al menos 10 caracteres' })

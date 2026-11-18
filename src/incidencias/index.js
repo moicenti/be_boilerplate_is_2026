@@ -1,1 +1,0 @@
-export * from './incidencias.module.js';
