@@ -56,7 +56,9 @@
       "@CommonAreas": ["./src/common-areas/index.ts"],
       "@CommonAreas/*": ["./src/common-areas/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
-      "@Notificaciones/*": ["./src/notificaciones/*/index.ts"]
+      "@Notificaciones/*": ["./src/notificaciones/*/index.ts"],
+      "@Reportes": ["./src/reportes/index.ts"],
+      "@Reportes/*": ["./src/reportes/*/index.ts"]
     }
   }
 }
