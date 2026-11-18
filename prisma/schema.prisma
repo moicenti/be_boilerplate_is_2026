@@ -31,11 +31,15 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
-  unit          String
+  unitId        String?        @map("unit_id") @db.Uuid
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
 
   role Role @default(RESIDENTE)
 
-  reports Report[]
+  reports         Report[]      @relation("UserReports")
+  assignedReports Report[]      @relation("AssignedReports")
+  resolvedReports Report[]      @relation("ResolvedReports")
+  events          ReportEvent[]
 
   receivedPackages  Package[] @relation("PackageReceivedBy")
   deliveredPackages Package[] @relation("PackageDeliveredBy")
@@ -44,6 +48,9 @@ model User {
   commonAreaChanges  CommonAreaChange[]
   commonAreaBlocks   CommonAreaBlock[]  @relation("CommonAreaBlockCreatedBy")
   reservations       Reservation[]
+  feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
+  feeRuleChanges     FeeRuleChange[]
+  generationRuns     GenerationRun[]
 
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
@@ -52,6 +59,9 @@ model User {
   notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
   lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
 
+  preAutorizacionesCreadas PreAutorizacion[] @relation("PreAutorizacionesCreadas")
+  createdAssemblies Assembly[] @relation("AssemblyCreatedBy")
+
   @@map("users")
 }
 
@@ -59,6 +69,14 @@ enum Role {
   RESIDENTE
   ADMINISTRADOR
   SEGURIDAD
+  MANTENIMIENTO
+}
+
+enum Priority {
+  BAJA
+  MEDIA
+  ALTA
+  CRITICA
 }
 
 model Unit {
@@ -66,12 +84,24 @@ model Unit {
   code        String   @unique
   tower       String
   description String
+  type        UnitType @default(DEPARTAMENTO) @map("tipo")
+  // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
+  active      Boolean  @default(true) @map("activa")
   createdAt   DateTime @default(now()) @map("created_at")
-
+  users          User[]
   packages       Package[]
   notificaciones Notificacion[]
+  preAutorizaciones PreAutorizacion[]
+  
+  reservations   Reservation[]
 
   @@map("units")
+}
+
+enum UnitType {
+  DEPARTAMENTO
+  CASA
+  LOCAL
 }
 
 enum PackageStatus {
@@ -136,30 +166,55 @@ model Report {
   status      String @default("Abierto")
   unit        String
 
+  priority              Priority?
+  priorityJustification String?   @map("priority_justification")
+  assigneeId            String?   @map("assignee_id") @db.Uuid
+  dueDate               DateTime? @map("due_date")
+
+  resolvedAt        DateTime? @map("resolved_at")
+  resolvedById      String?   @map("resolved_by_id") @db.Uuid
+  resolutionComment String?   @map("resolution_comment")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relación con el usuario que crea el reporte
   userId String @map("user_id") @db.Uuid
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("UserReports", fields: [userId], references: [id], onDelete: Cascade)
 
-  // Relación con las fotos
+  assignee   User? @relation("AssignedReports", fields: [assigneeId], references: [id])
+  resolvedBy User? @relation("ResolvedReports", fields: [resolvedById], references: [id])
+
   photos ReportPhoto[]
+  events ReportEvent[]
 
   @@map("reports")
 }
 
 model ReportPhoto {
   id        String   @id @default(uuid()) @db.Uuid
-  url       String // Ruta o URL del archivo guardado
+  url       String
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relación con el reporte
   reportId String @map("report_id") @db.Uuid
   report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@map("report_photos")
+}
+
+model ReportEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  action    String
+  metadata  Json?
+  userId    String   @map("user_id") @db.Uuid
+  reportId  String   @map("report_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id])
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@map("report_events")
 }
 
 // ───────────── H23: notificaciones ─────────────
@@ -256,7 +311,6 @@ model CommonArea {
   status             CommonAreaStatus @default(ACTIVA) @map("estado")
   createdAt          DateTime         @default(now()) @map("creado_en") @db.Timestamptz(6)
 
-  // Eliminación lógica: quién y cuándo.
   deletedAt   DateTime? @map("eliminado_en") @db.Timestamptz(6)
   deletedById String?   @map("eliminado_por") @db.Uuid
   deletedBy   User?     @relation("CommonAreaDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
@@ -266,7 +320,6 @@ model CommonArea {
   reservations Reservation[]
   changes      CommonAreaChange[]
 
-  // El nombre es único solo entre áreas ACTIVAS: una eliminada libera su nombre.
   @@unique([name], map: "area_comun_nombre_activa_key", where: raw("estado = 'ACTIVA'"))
   @@map("area_comun")
 }
@@ -279,7 +332,6 @@ model CommonAreaSchedule {
   opensAt   DateTime   @map("hora_apertura") @db.Time(0)
   closesAt  DateTime   @map("hora_cierre") @db.Time(0)
 
-  // Un horario por día.
   @@unique([areaId, dayOfWeek])
   @@map("horario_area")
 }
@@ -312,7 +364,6 @@ enum CommonAreaChangeField {
   DURACION_BLOQUE
 }
 
-/// Historial de cambios de capacidad, horario y duración de bloque de un área.
 model CommonAreaChange {
   id            Int                   @id @default(autoincrement())
   areaId        Int                   @map("area_id")
@@ -334,21 +385,22 @@ enum ReservationStatus {
   CANCELADA
 }
 
-/// Modelo mínimo de reserva: H6 solo lo necesita para bloquear la eliminación
-/// de áreas con reservas futuras. La historia de reservas lo completará.
 model Reservation {
-  id        Int               @id @default(autoincrement())
-  areaId    Int               @map("area_id")
-  // Restrict: las reservas se conservan aunque el área se elimine (lógicamente).
-  area      CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  userId    String            @map("usuario_id") @db.Uuid
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startsAt  DateTime          @map("inicio") @db.Timestamptz(6)
-  endsAt    DateTime          @map("fin") @db.Timestamptz(6)
-  status    ReservationStatus @default(PENDIENTE) @map("estado")
-  createdAt DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
+  id         Int               @id @default(autoincrement())
+  areaId     Int               @map("area_id")
+  area       CommonArea        @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  residentId String            @map("residente_id") @db.Uuid
+  resident   User              @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  unitId     String            @map("unidad_id") @db.Uuid
+  unit       Unit              @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  startsAt   DateTime          @map("inicio") @db.Timestamptz(6)
+  endsAt     DateTime          @map("fin") @db.Timestamptz(6)
+  status     ReservationStatus @default(CONFIRMADA) @map("estado")
+  createdAt  DateTime          @default(now()) @map("creado_en") @db.Timestamptz(6)
 
+  // La exclusión de cruces entre CONFIRMADAS vive en la migración (EXCLUDE USING gist).
   @@index([areaId, startsAt])
+  @@index([residentId, startsAt])
   @@map("reserva")
 }
 
@@ -389,11 +441,9 @@ model ComunicadoOficial {
   estado           EstadoComunicado    @default(PUBLICADO)
   fechaPublicacion DateTime            @default(now()) @map("fecha_publicacion") @db.Timestamptz
 
-  // Llave foránea hacia el Administrador emisor (UUID)
   emisorId String @map("emisor_id") @db.Uuid
   emisor   User   @relation("ComunicadosEmitidos", fields: [emisorId], references: [id], onDelete: Restrict)
 
-  // Adjuntos y lecturas
   adjuntos ComunicadoAdjunto[]
   lecturas LecturaComunicado[]
 
@@ -426,4 +476,112 @@ model LecturaComunicado {
 
   @@unique([comunicadoId, residenteId])
   @@map("lectura_comunicado")
+}
+
+enum EstadoPreAutorizacion {
+  VIGENTE
+  USADA
+  CANCELADA
+  EXPIRADA
+}
+
+model PreAutorizacion {
+  id              String                @id @default(uuid()) @db.Uuid
+  codigo          String                @unique
+  nombreVisitante String                @map("nombre_visitante")
+  documento       String
+  motivo          String?
+  acompanantes    Int                   @default(0)
+  inicio          DateTime              @db.Timestamptz
+  fin             DateTime              @db.Timestamptz
+  estado          EstadoPreAutorizacion @default(VIGENTE)
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Cascade)
+
+  residenteId String @map("residente_id") @db.Uuid
+  residente   User   @relation("PreAutorizacionesCreadas", fields: [residenteId], references: [id], onDelete: Cascade)
+
+  @@index([documento])
+  @@index([estado])
+  @@map("pre_autorizaciones")
+}
+enum AssemblyType {
+  ORDINARIA
+  EXTRAORDINARIA
+}
+
+enum AssemblyModality {
+  PRESENCIAL
+  VIRTUAL
+  HIBRIDA
+}
+
+model Assembly {
+  id          String           @id @default(uuid()) @db.Uuid
+  number      Int              @unique @default(autoincrement())
+  folio       String           @unique
+  title       String
+  type        AssemblyType
+  modality    AssemblyModality
+  startsAt    DateTime         @map("starts_at")
+  endsAt      DateTime         @map("ends_at")
+  location    String
+  description String
+  publishedAt DateTime?        @map("published_at")
+
+  createdById String   @map("created_by_id") @db.Uuid
+  createdBy   User     @relation("AssemblyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  agendaItems AgendaItem[]
+  topics      VotingTopic[]
+
+  @@index([startsAt])
+  @@map("asambleas")
+}
+
+model AgendaItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  assemblyId  String  @map("assembly_id") @db.Uuid
+  title       String
+  description String?
+  position    Int
+
+  assembly Assembly @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+
+  @@unique([assemblyId, position])
+  @@map("puntos_agenda")
+}
+
+model VotingTopic {
+  id          String   @id @default(uuid()) @db.Uuid
+  assemblyId  String   @map("assembly_id") @db.Uuid
+  title       String
+  description String
+  opensAt     DateTime @map("opens_at")
+  closesAt    DateTime @map("closes_at")
+  position    Int
+
+  assembly Assembly       @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  options  VotingOption[]
+
+  @@unique([assemblyId, position])
+  @@index([opensAt, closesAt])
+  @@map("temas_votacion")
+}
+
+model VotingOption {
+  id       String @id @default(uuid()) @db.Uuid
+  topicId  String @map("topic_id") @db.Uuid
+  text     String
+  position Int
+
+  topic VotingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, position])
+  @@unique([topicId, text])
+  @@map("opciones_votacion")
 }

@@ -1,9 +1,12 @@
 import {
   Controller,
+  Get,
   Post,
   Put,
   Patch,
   Delete,
+  Param,
+  ParseIntPipe,
   Body,
   UseInterceptors,
   UploadedFiles,
@@ -29,12 +32,42 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 export class ComunicadosController {
   constructor(private readonly comunicadosService: ComunicadosService) {}
 
+  // H20 (BE-20.1): Muro segmentado por torre/sección del residente
+  @Get('muro')
+  async obtenerMuro(@CurrentUser() user: any) {
+    return this.comunicadosService.obtenerMuro(user);
+  }
+
+  // H20 (Criterio 4): Consulta directa con validación 403 si es de torre/sección ajena
+  @Get(':id')
+  async obtenerDetalle(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.comunicadosService.obtenerDetalle(id, user);
+  }
+
+  // H20 (BE-20.2): Registrar acuse de recibo
+  @Post(':id/leer')
+  @HttpCode(HttpStatus.OK)
+  async marcarComoLeido(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.comunicadosService.marcarComoLeido(id, user);
+  }
+
+  // H19 (BE-19.1): Publicar comunicado oficial
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
     FilesInterceptor('archivos', 2, {
       limits: { fileSize: MAX_FILE_SIZE, files: 2 },
-      fileFilter: (_req: Request, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) => {
+      fileFilter: (
+        _req: Request,
+        file: Express.Multer.File,
+        callback: (error: Error | null, acceptFile: boolean) => void,
+      ) => {
         if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
           return callback(
             new BadRequestException(
@@ -46,7 +79,7 @@ export class ComunicadosController {
         callback(null, true);
       },
       storage: diskStorage({
-        destination: './uploads/anuncios',
+        destination: './public/uploads/anuncios',
         filename: (
           _req: Request,
           file: Express.Multer.File,
@@ -82,7 +115,7 @@ export class ComunicadosController {
     return this.comunicadosService.publicarComunicado(user.id, dto, files || []);
   }
 
-  // Criterio 4: Inmutabilidad oficial
+  // H19 (Criterio 4): Inmutabilidad oficial
   @Put(':id')
   @Patch(':id')
   @Delete(':id')

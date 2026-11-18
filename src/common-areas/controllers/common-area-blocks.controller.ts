@@ -9,7 +9,6 @@ import {
   ParseIntPipe,
   Post,
   UseFilters,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -27,7 +26,6 @@ import {
 } from '@nestjs/swagger';
 import { Role, type User } from '@PrismaClient';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { RolesGuard } from '@Auth/guards';
 import { ApiException } from '@Common/errors';
 import { ApiExceptionFilter } from '@Common/filters';
 import { CommonAreaBlocksService } from '../services/index.js';
@@ -49,7 +47,6 @@ const parseId = (label: string) =>
 @ApiForbiddenResponse({ description: 'ROL_NO_PERMITIDO' })
 @ApiNotFoundResponse({ description: 'AREA_INEXISTENTE / BLOQUEO_INEXISTENTE' })
 @UseFilters(ApiExceptionFilter)
-@UseGuards(RolesGuard)
 @Roles(Role.ADMINISTRADOR)
 @Controller('areas/:areaId/bloqueos')
 export class CommonAreaBlocksController {

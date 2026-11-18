@@ -16,6 +16,7 @@
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
+    "cuotas:generar": "node dist/cuotas/cli/generar-cuotas.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "npm run build && node dist/main.js",
     "start:dev": "concurrently --kill-others --names \"nest,alias\" -c \"green,cyan\" \"nest start --watch\" \"tsc-alias -w -p tsconfig.build.json\"",

@@ -9,8 +9,8 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseFilters,
-  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -28,11 +28,15 @@ import {
 } from '@nestjs/swagger';
 import { Role, type User } from '@PrismaClient';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { RolesGuard } from '@Auth/guards';
 import { ApiException } from '@Common/errors';
 import { ApiExceptionFilter } from '@Common/filters';
-import { CommonAreasService } from '../services/index.js';
-import { CommonAreaResponseDto, SaveCommonAreaDto } from '../dto/index.js';
+import { CommonAreaAvailabilityService, CommonAreasService } from '../services/index.js';
+import {
+  AvailabilityQueryDto,
+  AvailabilityResponseDto,
+  CommonAreaResponseDto,
+  SaveCommonAreaDto,
+} from '../dto/index.js';
 
 const ParseAreaIdPipe = new ParseIntPipe({
   exceptionFactory: () =>
@@ -47,10 +51,12 @@ const ParseAreaIdPipe = new ParseIntPipe({
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'NO_AUTENTICADO: sin sesión o token vencido.' })
 @UseFilters(ApiExceptionFilter)
-@UseGuards(RolesGuard)
 @Controller('areas')
 export class CommonAreasController {
-  constructor(private readonly commonAreasService: CommonAreasService) {}
+  constructor(
+    private readonly commonAreasService: CommonAreasService,
+    private readonly availabilityService: CommonAreaAvailabilityService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Lista las áreas comunes activas' })
@@ -58,6 +64,22 @@ export class CommonAreasController {
   async findAll(): Promise<CommonAreaResponseDto[]> {
     const areas = await this.commonAreasService.findAll();
     return areas.map((area) => CommonAreaResponseDto.fromEntity(area));
+  }
+
+  // Tiene que declararse antes de GET :id; si no, "disponibilidad" se toma como un id.
+  @Get('disponibilidad')
+  @ApiOperation({
+    summary: 'Consulta qué áreas están disponibles en una fecha y hora',
+    description:
+      'Fecha y hora en hora local del condominio. Cuentan el horario semanal, los bloqueos ' +
+      'y las reservas CONFIRMADAS. Duración por defecto: 60 minutos.',
+  })
+  @ApiOkResponse({ type: AvailabilityResponseDto })
+  @ApiBadRequestResponse({ description: 'SOLICITUD_INVALIDA: formato inválido o fecha pasada' })
+  @ApiNotFoundResponse({ description: 'AREA_INEXISTENTE: areaId no existe' })
+  async checkAvailability(@Query() query: AvailabilityQueryDto): Promise<AvailabilityResponseDto> {
+    const results = await this.availabilityService.check(query);
+    return AvailabilityResponseDto.from(query.fecha, query.hora, results);
   }
 
   @Get(':id')
