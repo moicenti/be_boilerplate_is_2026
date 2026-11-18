@@ -325,6 +325,79 @@ async function main() {
   // las 20 unidades de la Torre C. Dos son locales y la regla no tiene monto para LOCAL, así que
   // siempre dan error. El periodo de hace dos meses ya se generó; el del mes pasado, no.
   await seedFeeGeneration(admin.id);
+
+  // 11. Morosidad (H2, datos de QA-2.1). Con lo anterior, en mora quedan A-19, A-20 y la
+  // Torre C; en la Torre B, una morosa y los casos que no deben aparecer.
+  await seedDelinquency(passwordHash);
+}
+
+/** Hoy (AAAA-MM-DD) en la zona del condominio, desplazado `days` días. */
+function localDay(days = 0): string {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: process.env.APP_TIMEZONE ?? 'America/El_Salvador',
+  }).format(new Date());
+  return new Date(Date.parse(`${today}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+const TOWER_B_RESIDENTS = [
+  { email: 'elena.ruiz@example.com', unit: 'B-103' },
+  { email: 'jorge.salas@example.com', unit: 'B-205' },
+  { email: 'sofia.herrera@example.com', unit: 'B-402' },
+];
+
+async function seedDelinquency(passwordHash: string) {
+  const unitId = async (code: string) =>
+    (await prisma.unit.findUniqueOrThrow({ where: { code } })).id;
+  const residents = new Map<string, string>();
+  for (const resident of TOWER_B_RESIDENTS) {
+    const id = await unitId(resident.unit);
+    const user = await prisma.user.upsert({
+      where: { email: resident.email },
+      update: { unitId: id },
+      create: { email: resident.email, passwordHash, role: Role.RESIDENTE, unitId: id },
+    });
+    residents.set(resident.unit, user.id);
+  }
+
+  if ((await prisma.fee.count({ where: { unit: { tower: 'Torre B' } } })) > 0) return;
+
+  const fee = async (code: string, dueInDays: number, status: 'PENDIENTE' | 'PAGADA' = 'PENDIENTE') => {
+    const due = localDay(dueInDays);
+    return prisma.fee.create({
+      data: {
+        unitId: await unitId(code),
+        concept: 'Mantenimiento',
+        period: due.slice(0, 7),
+        amount: 100,
+        dueDate: new Date(`${due}T00:00:00Z`),
+        status,
+      },
+    });
+  };
+
+  // B-402: dos cuotas vencidas sin pagar -> en mora desde hace 87 días, adeuda 200.00.
+  await fee('B-402', -87);
+  await fee('B-402', -56);
+  // B-205: cuota vencida, pero pagada -> no aparece.
+  const paid = await fee('B-205', -35, 'PAGADA');
+  await prisma.payment.create({
+    data: {
+      unitId: paid.unitId,
+      userId: residents.get('B-205')!,
+      amount: 100,
+      reference: 'DEMO-SEED-H2-0001',
+      allocations: { create: [{ feeId: paid.id, amount: 100 }] },
+    },
+  });
+  // B-103: vence hoy -> todavía no está vencida (solo el día en que se corre el seed).
+  await fee('B-103', 0);
+  // A-202: al día, vence en 10 días.
+  await fee('A-202', 10);
+
+  console.log(
+    `Morosidad demo: B-402 en mora desde ${localDay(-87)}; B-205 pagada, ` +
+      `B-103 vence hoy (${localDay(0)}) y A-202 al día`,
+  );
 }
 
 const TOWER_C = 'Torre C';

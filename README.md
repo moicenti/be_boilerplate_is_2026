@@ -19,6 +19,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Cuotas y generación automática (H3)](#cuotas-y-generación-automática-h3)
 - [Generación manual de cuotas (H34)](#generación-manual-de-cuotas-h34)
 - [Estado de cuenta y pago de cuotas (H1)](#estado-de-cuenta-y-pago-de-cuotas-h1)
+- [Unidades en mora (H2)](#unidades-en-mora-h2)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -326,6 +327,7 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `GET` | `/reglas-cuota/{id}/ejecuciones?pagina=&tamano=` | Bearer · `ADMINISTRADOR` | `200` | Historial paginado de ejecuciones automáticas y manuales (H34) |
 | `GET` | `/unidades/{unidadId}/estado-de-cuenta` | Bearer · `RESIDENTE` (su unidad) o `ADMINISTRADOR` | `200` | Saldo total, cuotas con su saldo y pagos de la unidad. `400` id no UUID, `403` `RECURSO_AJENO`, `404` `UNIDAD_INEXISTENTE` (H1) |
 | `POST` | `/pagos` | Bearer · `RESIDENTE` | `201` | Paga una o varias cuotas de su unidad. `400` lista vacía o monto ≤ 0, `402` `PAGO_RECHAZADO`, `403` `RECURSO_AJENO`, `404` `CUOTA_INEXISTENTE`, `409` `CUOTA_YA_PAGADA` (o referencia repetida), `422` `MONTO_EXCEDE_DEUDA` (H1) |
+| `GET` | `/unidades/mora?torre=&antiguedadMinDias=&pagina=&tamano=&orden=` | Bearer · `ADMINISTRADOR` | `200` | Unidades en mora con desde cuándo, días de atraso, monto adeudado y cuotas vencidas. `400` `SOLICITUD_INVALIDA` (H2) |
 
 Los endpoints de áreas, reservas, reglas de cuota y pagos responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 
@@ -521,6 +523,46 @@ Las validaciones de cuotas y monto se hacen **antes** de la espera, así que un 
 ### Datos de prueba
 
 El seed crea en la unidad `A-19` (`demo@example.com`) una cuota pagada, una con pago parcial y una pendiente, y en `A-20` (`otro@example.com`) una cuota pendiente de otra unidad. El `unidadId` de cada residente sale de `GET /auth/me` (`unit.id`).
+
+## Unidades en mora (H2)
+
+`GET /api/v1/unidades/mora` (solo `ADMINISTRADOR`). Consulta de solo lectura: nada se guarda, se calcula de `cuota` y `pago_cuota` en cada consulta, así que una unidad que paga todo lo vencido deja de aparecer en la siguiente. Código en [src/pagos](src/pagos) ([regla de mora](src/pagos/utils/delinquency.ts)).
+
+### Regla
+
+- Una cuota está **vencida** si está `PENDIENTE` o `PARCIAL`, tiene saldo (monto menos lo pagado) y su vencimiento es **anterior a hoy** en `APP_TIMEZONE`. Una cuota que vence hoy todavía no está vencida; `PAGADA` y `ANULADA` nunca cuentan.
+- Una unidad está **en mora** si tiene al menos una cuota vencida. Se incluyen también las unidades inactivas, porque la deuda sigue existiendo.
+- `enMoraDesde`: el vencimiento más antiguo de sus cuotas vencidas. `diasAtraso`: hoy menos `enMoraDesde`. `montoAdeudado`: suma de los saldos de las cuotas vencidas (no incluye las que aún no vencen). `cuotasVencidas`: cuántas son.
+
+### Parámetros
+
+| Parámetro | Valores | Por defecto |
+|---|---|---|
+| `torre` | Torre exacta, sin distinguir mayúsculas (`Torre A`) | todas |
+| `antiguedadMinDias` | Entero ≥ 0: solo unidades con `diasAtraso` ≥ ese valor | sin filtro |
+| `pagina` / `tamano` | Entero ≥ 1 / 1 a 100 | 1 / 20 |
+| `orden` | `unidad`, `responsable`, `enMoraDesde`, `diasAtraso`, `montoAdeudado`, `cuotasVencidas`; con `-` delante, descendente. Empata por código de unidad | `-diasAtraso` |
+
+Un parámetro desconocido o inválido responde `400 SOLICITUD_INVALIDA`.
+
+### Respuesta
+
+```json
+{
+  "total": 21, "pagina": 1, "tamano": 20, "fechaCorte": "2026-11-18",
+  "items": [
+    { "unidadId": "…uuid…", "codigoUnidad": "B-402", "torre": "Torre B",
+      "responsable": "sofia.herrera@example.com", "enMoraDesde": "2026-08-23",
+      "diasAtraso": 87, "montoAdeudado": 200.00, "cuotasVencidas": 2 }
+  ]
+}
+```
+
+`responsable` es el correo del residente activo más antiguo de la unidad (los usuarios no tienen nombre) y es `null` si no tiene ninguno. `fechaCorte` es el "hoy" usado en el cálculo. Para ver el detalle de una unidad: `GET /unidades/{unidadId}/estado-de-cuenta`.
+
+### Datos demo (QA-2.1)
+
+Con `npm run db:seed` quedan en mora A-19 y A-20 (Torre A, datos de H1), las 18 cuotas generadas de la Torre C (H34) y **B-402** (dos cuotas vencidas hace 87 y 56 días). No deben aparecer **B-205** (cuota vencida pero pagada), **B-103** (vence el día en que se corre el seed) ni **A-202** (vence en 10 días). Los residentes de la Torre B (`elena.ruiz@`, `jorge.salas@`, `sofia.herrera@example.com`) usan la contraseña `Demo1234!`.
 
 ## Arquitectura por capas
 
