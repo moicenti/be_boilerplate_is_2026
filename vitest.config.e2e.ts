@@ -9,7 +9,8 @@ export default defineConfig({
     root: './',
     include: ['**/*.e2e-spec.ts'],
     globalSetup: ['./test/setup/global-setup.ts'],
-    env: { DATABASE_URL: testDatabaseUrl() },
+    // Sin la espera de 5 s de la pasarela de pago simulada (H1).
+    env: { DATABASE_URL: testDatabaseUrl(), PAGO_SIMULADO_ESPERA_MS: '0' },
     fileParallelism: false,
   },
 });

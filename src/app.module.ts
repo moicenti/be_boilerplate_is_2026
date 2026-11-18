@@ -18,6 +18,7 @@ import { AsambleasModule } from '@Asambleas';
 import { CommonAreasModule } from '@CommonAreas';
 import { ReservasModule } from '@Reservas';
 import { CuotasModule } from '@Cuotas';
+import { PagosModule } from '@Pagos';
 import { AnunciosModule } from './anuncio/index.js';
 import { VisitasModule } from '@Visitas';
 
@@ -41,6 +42,7 @@ import { VisitasModule } from '@Visitas';
     VisitasModule,
     ReservasModule,
     CuotasModule,
+    PagosModule,
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',

@@ -11,6 +11,10 @@ import {
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
+
+import { ApiBearerAuth
+  ,ApiUnauthorizedResponse
+ } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -25,6 +29,8 @@ import {
   RechazarResolucionDto,
 } from '@Incidencias/dto';
 
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({ description: 'NO_AUTENTICADO: sin sesión o token vencido.' })
 @Controller('incidencias')
 export class IncidenciasController {
   constructor(private readonly incidenciasService: IncidenciasService) {}
