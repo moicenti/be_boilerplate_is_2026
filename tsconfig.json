@@ -60,6 +60,8 @@
       "@CommonAreas/*": ["./src/common-areas/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
       "@Notificaciones/*": ["./src/notificaciones/*/index.ts"],
+      "@Reportes": ["./src/reportes/index.ts"],
+      "@Reportes/*": ["./src/reportes/*/index.ts"]
       "@Visitas": ["./src/visitas/index.ts"],
       "@Visitas/*": ["./src/visitas/*/index.ts"],
       "@Reservas": ["./src/reservas/index.ts"],
