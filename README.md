@@ -17,6 +17,7 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
 - [Cuotas y generación automática (H3)](#cuotas-y-generación-automática-h3)
+- [Generación manual de cuotas (H34)](#generación-manual-de-cuotas-h34)
 - [Estado de cuenta y pago de cuotas (H1)](#estado-de-cuenta-y-pago-de-cuotas-h1)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
@@ -320,6 +321,9 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `PUT` | `/reglas-cuota/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza la configuración; solo afecta periodos futuros (H3) |
 | `PATCH` | `/reglas-cuota/{id}/estado` | Bearer · `ADMINISTRADOR` | `200` | Activa, pausa o desactiva; `409` `TRANSICION_INVALIDA` si ya tiene ese estado, `422` al activar una regla incompleta (H3) |
 | `GET` | `/reglas-cuota/{id}/historial` | Bearer · `ADMINISTRADOR` | `200` | Auditoría: creación, ediciones y cambios de estado con usuario y fecha (H3) |
+| `POST` | `/reglas-cuota/{id}/generacion/vista-previa` | Bearer · `ADMINISTRADOR` | `200` | Simula la generación de `{"periodo": "AAAA-MM"}` sin escribir: cuotas por crear, monto total, ya generadas y excepciones. `400` periodo inválido, `404` `REGLA_INEXISTENTE`, `422` `REGLA_INACTIVA` (regla no activa o periodo futuro) (H34) |
+| `POST` | `/reglas-cuota/{id}/generacion` | Bearer · `ADMINISTRADOR` | `200` | Genera las cuotas faltantes del periodo: creadas, omitidas, errores con su causa y monto total. Mismos errores que la vista previa, más `409` `EJECUCION_EN_CURSO` (H34) |
+| `GET` | `/reglas-cuota/{id}/ejecuciones?pagina=&tamano=` | Bearer · `ADMINISTRADOR` | `200` | Historial paginado de ejecuciones automáticas y manuales (H34) |
 | `GET` | `/unidades/{unidadId}/estado-de-cuenta` | Bearer · `RESIDENTE` (su unidad) o `ADMINISTRADOR` | `200` | Saldo total, cuotas con su saldo y pagos de la unidad. `400` id no UUID, `403` `RECURSO_AJENO`, `404` `UNIDAD_INEXISTENTE` (H1) |
 | `POST` | `/pagos` | Bearer · `RESIDENTE` | `201` | Paga una o varias cuotas de su unidad. `400` lista vacía o monto ≤ 0, `402` `PAGO_RECHAZADO`, `403` `RECURSO_AJENO`, `404` `CUOTA_INEXISTENTE`, `409` `CUOTA_YA_PAGADA` (o referencia repetida), `422` `MONTO_EXCEDE_DEUDA` (H1) |
 
@@ -439,6 +443,37 @@ Una regla con cuotas no se puede eliminar (`ON DELETE RESTRICT`): solo desactiva
 - **Concurrencia:** un índice único parcial impide dos ejecuciones `EN_CURSO` para la misma regla y periodo.
 - **Reanudación:** si el proceso se cae, su ejecución queda `EN_CURSO`. Pasados 30 minutos se considera interrumpida: la tarea del día siguiente la cierra como `CON_ERRORES` y genera solo lo faltante del periodo.
 - Una regla que falla no detiene a las demás.
+
+## Generación manual de cuotas (H34)
+
+El administrador genera a pedido el periodo de una regla, por ejemplo para recuperar un mes que la tarea automática no generó. Usa el mismo motor que la tarea programada de H3 ([fee-generation.service.ts](src/cuotas/services/fee-generation.service.ts)), así que se comporta igual y es igual de idempotente; la ejecución queda con origen `MANUAL` y el usuario que la confirmó.
+
+### Flujo
+
+1. **Vista previa** (`POST /reglas-cuota/{id}/generacion/vista-previa`): no escribe nada. Calcula lo mismo que haría la ejecución en ese momento:
+
+   | Campo | Significado | En la ejecución |
+   |---|---|---|
+   | `cantidadUnidades` | Unidades a las que se les crearía la cuota | `creadas` |
+   | `montoTotal` | Suma de esas cuotas | `montoTotal` |
+   | `yaGeneradas` | Unidades que ya tienen la cuota del periodo | parte de `omitidas` |
+   | `excepciones[]` | Unidades que no recibirán cuota: `motivo` (`UNIDAD_INACTIVA`, `SIN_RESPONSABLE`, `SIN_MONTO`) y `resultado` (`OMITIDA` o `ERROR`, según la política de la regla) | `omitidas` o `errores` |
+   | `fechaVencimiento` | Día de vencimiento de las cuotas del periodo | — |
+
+   Si nada cambia entre la vista previa y la confirmación, los totales coinciden.
+2. **Ejecución** (`POST /reglas-cuota/{id}/generacion`): genera solo las cuotas faltantes y responde `ejecucionId`, `estado` (`COMPLETADA` o `CON_ERRORES`), `creadas`, `omitidas`, `errores` (`unidadId`, `codigoUnidad`, `causa`) y `montoTotal` (lo creado en esta ejecución). Volver a ejecutar un periodo completo devuelve `creadas: 0` y todo como omitido.
+3. **Historial** (`GET /reglas-cuota/{id}/ejecuciones?pagina=1&tamano=20`): `{total, pagina, tamano, items}`, de la más reciente a la más antigua. Cada ítem trae `fecha` (inicio, con el offset de `APP_TIMEZONE`), `origen`, `usuario` (correo; `null` en las automáticas), `periodo`, `estado`, `creadas`, `omitidas` y `conError`. `tamano` va de 1 a 100.
+
+### Reglas
+
+- Solo reglas `ACTIVA`, igual que la tarea automática. Una regla `PAUSADA` o `INACTIVA` responde `422 REGLA_INACTIVA`.
+- Se puede generar el periodo actual y cualquiera anterior; un periodo futuro (según `APP_TIMEZONE`) también responde `422 REGLA_INACTIVA`. El mensaje indica cuál de los dos casos es.
+- Si ya hay una ejecución `EN_CURSO` de la regla para ese periodo (automática o manual), responde `409 EJECUCION_EN_CURSO` sin crear nada. Una ejecución `EN_CURSO` de hace más de 30 minutos se considera interrumpida: se cierra y se genera lo faltante.
+- Una unidad que ya tiene la cuota del periodo siempre cuenta como omitida, aunque después haya quedado inactiva o sin responsable.
+
+### Datos demo (QA-34.1)
+
+`npm run db:seed` crea la regla ACTIVA "Mantenimiento" para la **Torre C** (20 unidades, `C-101` a `C-120`; 85.00 por departamento). `C-119` y `C-120` son locales y la regla no tiene monto para `LOCAL`, así que siempre dan error. El periodo de hace dos meses ya está generado (ejecución automática con 18 creadas y 2 errores) y el del mes pasado no.
 
 ## Estado de cuenta y pago de cuotas (H1)
 
