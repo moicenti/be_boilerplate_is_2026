@@ -808,10 +808,6 @@ model VotingOption {
 // MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
 // ==========================================
 
-// ==========================================
-// MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
-// ==========================================
-
 model PerfilDirectorio {
   id              Int      @id @default(autoincrement())
   userId          String   @unique @map("user_id") @db.Uuid
@@ -827,6 +823,7 @@ model PerfilDirectorio {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([nombre, apellido])
   @@index([apellido])
   @@index([visibleGlobal])
   @@map("privacidad_directorio")
