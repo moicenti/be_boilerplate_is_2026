@@ -115,11 +115,23 @@ export class ComunicadosController {
     return this.comunicadosService.publicarComunicado(user.id, dto, files || []);
   }
 
-  // H19 (Criterio 4): Inmutabilidad oficial
+  // H19 (Criterio 4): Inmutabilidad oficial (métodos separados para evitar sobrescritura de metadata en NestJS)
   @Put(':id')
+  bloquearPut() {
+    throw new MethodNotAllowedException(
+      'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
+    );
+  }
+
   @Patch(':id')
+  bloquearPatch() {
+    throw new MethodNotAllowedException(
+      'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
+    );
+  }
+
   @Delete(':id')
-  bloquearEdicion() {
+  bloquearDelete() {
     throw new MethodNotAllowedException(
       'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
     );
