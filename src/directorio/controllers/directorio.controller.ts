@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '@Auth/decorators';
 import type { User } from '@PrismaClient';
 import { DirectorioService } from '../services/index.js';
-import { ActualizarPrivacidadDto } from '../dto/index.js';
+import { ActualizarPrivacidadDto, BuscarDirectorioDto } from '../dto/index.js';
 
 @ApiTags('directorio')
 @ApiBearerAuth()
@@ -26,5 +26,15 @@ export class DirectorioController {
     @Body() dto: ActualizarPrivacidadDto,
   ) {
     return this.directorioService.actualizarPreferencias(user.id, dto);
+  }
+
+  // H22 (BE-22.1): Búsqueda y consulta paginada del directorio comunitario
+  @Get()
+  @ApiOperation({ summary: 'Busca y lista vecinos del directorio respetando privacidad' })
+  async buscarDirectorio(
+    @CurrentUser() user: User,
+    @Query() filtros: BuscarDirectorioDto,
+  ) {
+    return this.directorioService.buscarEnDirectorio(user.id, filtros);
   }
 }
