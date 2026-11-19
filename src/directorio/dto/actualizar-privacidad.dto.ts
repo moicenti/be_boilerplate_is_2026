@@ -1,46 +1,33 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
 
 export class ActualizarPrivacidadDto {
-  @ApiPropertyOptional({ example: 'Ana' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  nombre?: string;
-
-  @ApiPropertyOptional({ example: 'Martínez' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  apellido?: string;
-
-  @ApiPropertyOptional({ example: '+503 7123-4567' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(25)
-  telefono?: string;
-
   @ApiPropertyOptional({
-    example: true,
-    description: 'Activa o desactiva la aparición global en el directorio',
+    description: 'Si se envía y no coincide con el usuario autenticado, retorna 403 Forbidden (BE-21.2)',
   })
   @IsOptional()
-  @IsBoolean()
-  visibleEnDirectorio?: boolean;
+  @IsUUID()
+  residenteId?: string;
 
-  @ApiPropertyOptional({
-    example: true,
-    description: 'Muestra u oculta el número de teléfono en el directorio',
-  })
+  @ApiProperty({ example: true, description: 'Interruptor global: Aparecer en el directorio vecinal' })
+  @IsBoolean()
+  visibleGlobal: boolean;
+
+  @ApiProperty({ example: false, description: 'Interruptor individual: Mostrar teléfono' })
+  @IsBoolean()
+  mostrarTelefono: boolean;
+
+  @ApiProperty({ example: true, description: 'Interruptor individual: Mostrar correo electrónico' })
+  @IsBoolean()
+  mostrarCorreo: boolean;
+
+  @ApiPropertyOptional({ example: true, description: 'Interruptor de UI: Mostrar nombre completo' })
   @IsOptional()
   @IsBoolean()
-  mostrarTelefono?: boolean;
+  mostrarNombre?: boolean;
 
-  @ApiPropertyOptional({
-    example: false,
-    description: 'Muestra u oculta el correo electrónico en el directorio',
-  })
+  @ApiPropertyOptional({ example: true, description: 'Interruptor de UI: Mostrar unidad en directorio' })
   @IsOptional()
   @IsBoolean()
-  mostrarCorreo?: boolean;
+  mostrarUnidad?: boolean;
 }

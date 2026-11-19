@@ -26,27 +26,23 @@ export class DirectorioRepository {
     });
   }
 
-  async guardarPrivacidad(userId: string, dto: ActualizarPrivacidadDto) {
+  async guardarPreferencias(userId: string, dto: ActualizarPrivacidadDto) {
     return this.prisma.perfilDirectorio.upsert({
       where: { userId },
       update: {
-        ...(dto.nombre !== undefined ? { nombre: dto.nombre.trim() || null } : {}),
-        ...(dto.apellido !== undefined ? { apellido: dto.apellido.trim() || null } : {}),
-        ...(dto.telefono !== undefined ? { telefono: dto.telefono.trim() || null } : {}),
-        ...(dto.visibleEnDirectorio !== undefined
-          ? { visibleEnDirectorio: dto.visibleEnDirectorio }
-          : {}),
-        ...(dto.mostrarTelefono !== undefined ? { mostrarTelefono: dto.mostrarTelefono } : {}),
-        ...(dto.mostrarCorreo !== undefined ? { mostrarCorreo: dto.mostrarCorreo } : {}),
+        visibleGlobal: dto.visibleGlobal,
+        mostrarTelefono: dto.mostrarTelefono,
+        mostrarCorreo: dto.mostrarCorreo,
+        ...(dto.mostrarNombre !== undefined ? { mostrarNombre: dto.mostrarNombre } : {}),
+        ...(dto.mostrarUnidad !== undefined ? { mostrarUnidad: dto.mostrarUnidad } : {}),
       },
       create: {
         userId,
-        nombre: dto.nombre?.trim() || null,
-        apellido: dto.apellido?.trim() || null,
-        telefono: dto.telefono?.trim() || null,
-        visibleEnDirectorio: dto.visibleEnDirectorio ?? true,
-        mostrarTelefono: dto.mostrarTelefono ?? false,
-        mostrarCorreo: dto.mostrarCorreo ?? false,
+        visibleGlobal: dto.visibleGlobal,
+        mostrarTelefono: dto.mostrarTelefono,
+        mostrarCorreo: dto.mostrarCorreo,
+        mostrarNombre: dto.mostrarNombre ?? false,
+        mostrarUnidad: dto.mostrarUnidad ?? false,
       },
     });
   }

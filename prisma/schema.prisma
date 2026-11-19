@@ -808,20 +808,26 @@ model VotingOption {
 // MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
 // ==========================================
 
+// ==========================================
+// MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
+// ==========================================
+
 model PerfilDirectorio {
-  id                  Int      @id @default(autoincrement())
-  userId              String   @unique @map("user_id") @db.Uuid
-  nombre              String?  @db.VarChar(80)
-  apellido            String?  @db.VarChar(80)
-  telefono            String?  @db.VarChar(25)
-  visibleEnDirectorio Boolean  @default(true) @map("visible_en_directorio")
-  mostrarTelefono     Boolean  @default(false) @map("mostrar_telefono")
-  mostrarCorreo       Boolean  @default(false) @map("mostrar_correo")
-  actualizadoEn       DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
+  id              Int      @id @default(autoincrement())
+  userId          String   @unique @map("user_id") @db.Uuid
+  nombre          String?  @db.VarChar(100)
+  apellido        String?  @db.VarChar(80)
+  telefono        String?  @db.VarChar(20)
+  visibleGlobal   Boolean  @default(false) @map("visible_global")
+  mostrarTelefono Boolean  @default(false) @map("mostrar_telefono")
+  mostrarCorreo   Boolean  @default(false) @map("mostrar_correo")
+  mostrarNombre   Boolean  @default(false) @map("mostrar_nombre")
+  mostrarUnidad   Boolean  @default(false) @map("mostrar_unidad")
+  actualizadoEn   DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([apellido])
-  @@index([visibleEnDirectorio])
-  @@map("perfil_directorio")
+  @@index([visibleGlobal])
+  @@map("privacidad_directorio")
 }
