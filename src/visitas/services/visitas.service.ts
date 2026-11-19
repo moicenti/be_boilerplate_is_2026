@@ -121,6 +121,45 @@ export class VisitaService {
   }
 
   async findActivas() {
-    return this.visitaRepo.findAllActivas();
-  }
+  const visitas = await this.visitaRepo.findAllActivas();
+
+  return {
+    total: visitas.length,
+    visitas: visitas.map((v) => ({
+      id: v.id,
+      nombreVisitante: v.nombreVisitante,
+      documento: v.documento,
+      acompanantes: v.acompanantes,
+      estado: v.estado,
+      entrada: v.entrada,
+      salidaEsperada: v.preautorizacion?.fin ?? null,
+      motivo: v.motivo,
+      unidad: v.unidad
+        ? {
+            id: v.unidad.id,
+            code: v.unidad.code,
+            tower: v.unidad.tower,
+            label: `${v.unidad.tower} · ${v.unidad.code}`,
+          }
+        : null,
+      preautorizacion: v.preautorizacion
+        ? {
+            id: v.preautorizacion.id,
+            codigo: v.preautorizacion.codigo,
+            estado: v.preautorizacion.estado,
+            fin: v.preautorizacion.fin,
+          }
+        : null,
+      registradoPor: v.registradoPor
+        ? { id: v.registradoPor.id, email: v.registradoPor.email }
+        : null,
+    })),
+  };
+}
+
+async countActivas() {
+  const total = await this.visitaRepo.countActivas();
+  return { total };
+}
+
 }

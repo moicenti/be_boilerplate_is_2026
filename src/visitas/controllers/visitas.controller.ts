@@ -87,8 +87,64 @@ export class VisitaController {
     summary: 'Listar visitantes dentro del condominio',
     description: 'Solo seguridad y administración. Devuelve todas las visitas activas.',
   })
-  @ApiResponse({ status: 200, description: 'Lista de visitas activas.' })
-  async activas() {
-    return this.visitaService.findActivas();
-  }
+
+
+
+  @Get('activas')
+@Roles(Role.SEGURIDAD, Role.ADMINISTRADOR)
+@ApiOperation({
+  summary: 'Listar visitantes dentro del condominio',
+  description:
+    'Devuelve la lista de visitantes activos con su unidad, autorización, ' +
+    'hora de entrada y hora esperada de salida. Solo seguridad y administración.',
+})
+@ApiResponse({
+  status: 200,
+  description: 'Lista de visitantes activos + total.',
+  schema: {
+    example: {
+      total: 2,
+      visitas: [
+        {
+          id: 'uuid',
+          nombreVisitante: 'Juan Pérez',
+          documento: '12345678',
+          acompanantes: 2,
+          estado: 'DENTRO',
+          entrada: '2026-11-18T10:30:00.000Z',
+          salidaEsperada: '2026-11-18T18:00:00.000Z',
+          motivo: null,
+          unidad: { id: 'uuid', code: 'A-19', tower: 'Torre A', label: 'Torre A · A-19' },
+          preautorizacion: {
+            id: 'uuid',
+            codigo: 'AB3K9XZ2',
+            estado: 'USADA',
+            fin: '2026-11-18T18:00:00.000Z',
+          },
+          registradoPor: { id: 'uuid', email: 'ricardo.soto@example.com' },
+        },
+      ],
+    },
+  },
+})
+@ApiResponse({ status: 403, description: 'Solo seguridad y administración.' })
+async activas() {
+  return this.visitaService.findActivas();
+}
+
+@Get('activas/count')
+@Roles(Role.SEGURIDAD, Role.ADMINISTRADOR)
+@ApiOperation({
+  summary: 'Contador de visitantes dentro (para polling ligero)',
+  description:
+    'Devuelve solo el total de visitantes activos. Útil para polling cada 30s ' +
+    'sin traer toda la lista.',
+})
+@ApiResponse({ status: 200, description: 'Total de visitantes activos.' })
+async countActivas() {
+  return this.visitaService.countActivas();
+}
+
+  
+  
 }

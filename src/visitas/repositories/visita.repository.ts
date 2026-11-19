@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import type { RegistrarEntradaDto } from '../dto/index.js';
 
 @Injectable()
 export class VisitaRepository {
@@ -22,7 +21,25 @@ export class VisitaRepository {
   async findAllActivas() {
     return this.prisma.visitaActiva.findMany({
       where: { estado: { in: ['DENTRO', 'DENTRO_SIN_AUTORIZACION'] } },
-      include: { unidad: true, preautorizacion: true },
+      include: {
+        unidad: {
+          select: { id: true, code: true, tower: true, description: true },
+        },
+        preautorizacion: {
+          select: {
+            id: true,
+            codigo: true,
+            estado: true,
+            inicio: true,
+            fin: true,
+            nombreVisitante: true,
+            documento: true,
+          },
+        },
+        registradoPor: {
+          select: { id: true, email: true },
+        },
+      },
       orderBy: { entrada: 'desc' },
     });
   }
@@ -48,7 +65,10 @@ export class VisitaRepository {
         preautorizacionId: data.preautorizacionId,
         registradoPorId: data.registradoPorId,
       },
-      include: { unidad: true, preautorizacion: true },
+      include: {
+        unidad: { select: { id: true, code: true, tower: true } },
+        preautorizacion: { select: { id: true, codigo: true, estado: true, fin: true } },
+      },
     });
   }
 
@@ -62,4 +82,10 @@ export class VisitaRepository {
       },
     });
   }
+
+  async countActivas() {
+  return this.prisma.visitaActiva.count({
+    where: { estado: { in: ['DENTRO', 'DENTRO_SIN_AUTORIZACION'] } },
+  });
+}
 }
