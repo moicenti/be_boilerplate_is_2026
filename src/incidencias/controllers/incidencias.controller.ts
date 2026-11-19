@@ -33,6 +33,7 @@ import {
   ResolverIncidenciaDto,
   RechazarResolucionDto,
 } from '@Incidencias/dto';
+import { ImageValidationInterceptor } from '../../common/interceptor/image-validation.interceptor.js'; 
 
 @ApiTags('incidencias')
 @ApiBearerAuth()
@@ -42,29 +43,23 @@ export class IncidenciasController {
   constructor(private readonly incidenciasService: IncidenciasService) {}
 
   @Post()
-  @UseInterceptors(
-    FilesInterceptor('photos', 3, {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-          return cb(
-            new BadRequestException('Solo se permiten archivos JPG o PNG'),
-            false,
-          );
-        }
-        cb(null, true);
+@UseInterceptors(
+  FilesInterceptor('photos', 3, {
+    storage: diskStorage({
+      destination: './uploads',
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        // Extensión temporal; el interceptor la corrige después
+        const ext = extname(file.originalname).toLowerCase();
+        const safeExt = ['.jpg', '.jpeg', '.png'].includes(ext) ? ext : '.bin';
+        cb(null, `${file.fieldname}-${uniqueSuffix}${safeExt}`);
       },
-      limits: { fileSize: 5 * 1024 * 1024 },
     }),
-  )
+    // No validar mimetype aquí: el interceptor lo hace leyendo los bytes
+    limits: { fileSize: 5 * 1024 * 1024 },
+  }),
+  ImageValidationInterceptor,
+)
   @ApiOperation({
     summary: 'Crear un reporte de incidencia',
     description:
