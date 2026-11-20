@@ -1,31 +1,36 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import { EmailAlreadyTakenError } from '@Users/errors';
-import { Prisma, type User } from '@PrismaClient';
+import { EmailAlreadyTakenError, UnitNotFoundError } from '@Users/errors';
+import { Prisma, type Role, type User } from '@PrismaClient';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
+const FOREIGN_KEY_VIOLATION = 'P2003';
 
 export interface CreateUserData {
   email: string;
   passwordHash: string;
-  unitId: string;
+  role: Role;
+  unitId: string | null;
 }
 
 @Injectable()
 export class UserRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create({ email, passwordHash, unitId }: CreateUserData): Promise<User> {
+  async create({ email, passwordHash, role, unitId }: CreateUserData): Promise<User> {
     try {
       return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash, unitId },
+        data: { email: this.normalizeEmail(email), passwordHash, role, unitId },
+        include: { unit: true },
       });
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === UNIQUE_CONSTRAINT_VIOLATION
-      ) {
-        throw new EmailAlreadyTakenError(email);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === UNIQUE_CONSTRAINT_VIOLATION) {
+          throw new EmailAlreadyTakenError(email);
+        }
+        if (error.code === FOREIGN_KEY_VIOLATION && unitId) {
+          throw new UnitNotFoundError(unitId);
+        }
       }
       throw error;
     }

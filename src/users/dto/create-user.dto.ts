@@ -1,6 +1,19 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsIn,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { IsNormalizedEmail } from '@Common/decorators';
+import { Role } from '@PrismaClient';
+
+/** Roles que el administrador puede crear. Los administradores salen del seed. */
+export const CREATABLE_ROLES = [Role.RESIDENTE, Role.SEGURIDAD] as const;
+export type CreatableRole = (typeof CREATABLE_ROLES)[number];
 
 export class CreateUserDto {
   @ApiProperty({
@@ -26,10 +39,15 @@ export class CreateUserDto {
   })
   password!: string;
 
-  @ApiProperty({
-    description: 'UUID de la unidad a la que pertenece el usuario.',
+  @ApiProperty({ enum: CREATABLE_ROLES, example: Role.RESIDENTE })
+  @IsIn(CREATABLE_ROLES, { message: 'role debe ser RESIDENTE o SEGURIDAD.' })
+  role!: CreatableRole;
+
+  @ApiPropertyOptional({
+    description: 'UUID de la unidad. Obligatorio para RESIDENTE; no se envía para SEGURIDAD.',
     format: 'uuid',
   })
+  @ValidateIf((dto: CreateUserDto) => dto.role === Role.RESIDENTE || dto.unitId !== undefined)
   @IsUUID('4', { message: 'unitId debe ser un UUID válido.' })
-  unitId!: string;
+  unitId?: string;
 }

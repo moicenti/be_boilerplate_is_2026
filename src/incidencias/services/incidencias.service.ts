@@ -94,12 +94,12 @@ export class IncidenciasService {
       }
     }
 
-    const assignee = await this.incidenciaRepository.findActiveMaintenanceById(
+    const assignee = await this.incidenciaRepository.findActiveResponsibleById(
       dto.assigneeId,
     );
     if (!assignee) {
       throw new BadRequestException(
-        'El responsable debe ser un usuario de mantenimiento activo.',
+        'El responsable debe ser un administrador activo.',
       );
     }
 
@@ -125,9 +125,9 @@ const newStatus = ['Abierto', 'Rechazado'].includes(report.status)
     dto: ResolverIncidenciaDto,
     user: { id: string; role: Role },
   ) {
-    if (user.role !== Role.ADMINISTRADOR && user.role !== Role.MANTENIMIENTO) {
+    if (user.role !== Role.ADMINISTRADOR) {
       throw new ForbiddenException(
-        'Solo administración o mantenimiento pueden resolver reportes',
+        'Solo un administrador puede resolver reportes',
       );
     }
 
@@ -163,8 +163,8 @@ const newStatus = ['Abierto', 'Rechazado'].includes(report.status)
     return { reports, counts };
   }
 
-  async findMaintenanceUsers() {
-    return this.incidenciaRepository.findMaintenanceUsers();
+  async findResponsibleUsers() {
+    return this.incidenciaRepository.findResponsibleUsers();
   }
 
   async confirmResolution(reportId: string, userId: string) {

@@ -1,11 +1,16 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
 import { UserRepository } from '@Users/repositories';
-import { EmailAlreadyTakenError } from '@Users/errors';
+import { EmailAlreadyTakenError, UnitNotFoundError } from '@Users/errors';
 import type { CreateUserDto } from '@Users/dto';
 import type { EnvConfig } from '@Config';
-import type { User } from '@PrismaClient';
+import { Role, type User } from '@PrismaClient';
 
 @Injectable()
 export class UsersService {
@@ -18,14 +23,28 @@ export class UsersService {
     this.saltRounds = configService.get('BCRYPT_SALT_ROUNDS', { infer: true });
   }
 
-  async create({ email, password, unitId }: CreateUserDto): Promise<User> {
+  async create({ email, password, role, unitId }: CreateUserDto): Promise<User> {
+    if (role === Role.SEGURIDAD && unitId !== undefined) {
+      throw new BadRequestException(
+        'El personal de seguridad no pertenece a una unidad: no envíes unitId.',
+      );
+    }
+
     const passwordHash = await this.hashPassword(password);
 
     try {
-      return await this.userRepository.create({ email, passwordHash, unitId });
+      return await this.userRepository.create({
+        email,
+        passwordHash,
+        role,
+        unitId: unitId ?? null,
+      });
     } catch (error) {
       if (error instanceof EmailAlreadyTakenError) {
         throw new ConflictException('El email ya está registrado.');
+      }
+      if (error instanceof UnitNotFoundError) {
+        throw new NotFoundException('La unidad indicada no existe en el condominio.');
       }
       throw error;
     }

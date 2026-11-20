@@ -124,11 +124,11 @@ export class IncidenciasController {
 
   @Get('responsables')
   @Roles(Role.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Listar responsables de mantenimiento activos' })
-  @ApiResponse({ status: 200, description: 'Lista de usuarios MANTENIMIENTO activos.' })
+  @ApiOperation({ summary: 'Listar responsables (administradores activos)' })
+  @ApiResponse({ status: 200, description: 'Lista de administradores activos.' })
   @ApiResponse({ status: 403, description: 'Solo administradores.' })
   async responsables() {
-    return this.incidenciasService.findMaintenanceUsers();
+    return this.incidenciasService.findResponsibleUsers();
   }
 
   @Get(':id')
@@ -162,16 +162,16 @@ export class IncidenciasController {
   }
 
   @Patch(':id/resolver')
-  @Roles(Role.ADMINISTRADOR, Role.MANTENIMIENTO)
+  @Roles(Role.ADMINISTRADOR)
   @ApiOperation({
     summary: 'Marcar reporte como resuelto',
     description:
-      'Solo admin o mantenimiento. Requiere comentario de 10-200 caracteres. ' +
+      'Solo administradores. Requiere comentario de 10-200 caracteres. ' +
       'El reporte debe estar en estado "En atención".',
   })
   @ApiResponse({ status: 200, description: 'Reporte resuelto.' })
   @ApiResponse({ status: 400, description: 'Estado no resoluble o comentario inválido.' })
-  @ApiResponse({ status: 403, description: 'Solo admin o mantenimiento.' })
+  @ApiResponse({ status: 403, description: 'Solo administradores.' })
   async resolve(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ResolverIncidenciaDto,

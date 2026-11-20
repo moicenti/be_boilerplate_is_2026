@@ -121,7 +121,6 @@ const DEMO_ASSEMBLIES: {
 const STAFF = [
   { email: 'ricardo.soto@example.com', role: Role.SEGURIDAD },
   { email: 'laura.admin@example.com', role: Role.ADMINISTRADOR },
-  { email: 'mario.d@example.com', role: Role.MANTENIMIENTO },
 ];
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });

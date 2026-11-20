@@ -257,7 +257,7 @@ npm run db:reset
 | `otro@example.com` | la de `SEED_DEMO_PASSWORD` |
 | `admin@example.com` (rol `ADMINISTRADOR`) | la de `SEED_DEMO_PASSWORD` |
 
-Los usuarios nuevos se crean con rol `RESIDENTE`. Los endpoints restringidos por rol usan `@Roles(Role.ADMINISTRADOR)` junto con `@UseGuards(RolesGuard)` y responden `403 ROL_NO_PERMITIDO`.
+Solo existen los roles `ADMINISTRADOR`, `RESIDENTE` y `SEGURIDAD`; el administrador crea a los otros dos con `POST /users`. Las incidencias las asigna y resuelve un administrador. Los endpoints restringidos por rol usan `@Roles(Role.ADMINISTRADOR)` junto con `@UseGuards(RolesGuard)` y responden `403 ROL_NO_PERMITIDO`.
 
 ---
 
@@ -301,7 +301,7 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | Método | Ruta | Auth | Código | Descripción |
 |---|---|---|---|---|
 | `GET` | `/` | — | `200` | Health check |
-| `POST` | `/users` | — | `201` | Registra un usuario con email y contraseña |
+| `POST` | `/users` | Bearer · `ADMINISTRADOR` | `201` | Crea un usuario `RESIDENTE` (con `unitId`) o `SEGURIDAD` (sin unidad). `400` datos inválidos, `403` si no es administrador, `404` unidad inexistente, `409` email repetido |
 | `POST` | `/auth/login` | — | `200` | Inicia sesión con email y contraseña |
 | `POST` | `/auth/refresh` | — | `200` | Renueva el par de tokens |
 | `POST` | `/auth/logout` | — | `204` | Cierra la sesión |
@@ -339,25 +339,25 @@ Los endpoints de áreas, reservas, reglas de cuota y pagos responden los errores
 BASE=http://localhost:3000/api/v1
 ```
 
-**Registro**
+**Alta de usuarios (solo administrador)**
+
+No hay registro público. Solo existen tres roles: `ADMINISTRADOR` (lo crea el seed), `RESIDENTE` y `SEGURIDAD`. El administrador da de alta a los otros dos:
 
 ```bash
+# Residente: unitId obligatorio
 curl -X POST $BASE/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"nestor@example.com","password":"Str0ngPass"}'
+  -d '{"email":"nestor@example.com","password":"Str0ngPass","role":"RESIDENTE","unitId":"<uuid de la unidad>"}'
+
+# Seguridad: sin unitId
+curl -X POST $BASE/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"guardia@example.com","password":"Str0ngPass","role":"SEGURIDAD"}'
 ```
 
-```jsonc
-// 201 Created
-{
-  "id": "29bda5e8-e0c8-4ec2-bc7f-94c41c3c0140",
-  "email": "nestor@example.com",
-  "isActive": true,
-  "createdAt": "2026-09-20T17:29:59.852Z"
-}
-```
-
-La contraseña debe tener entre 8 y 72 caracteres, con al menos una minúscula, una mayúscula y un número. Si el email ya está registrado, la respuesta es `409 Conflict`.
+La contraseña debe tener entre 8 y 72 caracteres, con al menos una minúscula, una mayúscula y un número. Errores: `400` si el rol no es `RESIDENTE`/`SEGURIDAD`, si falta `unitId` en un residente o si se envía en un guardia; `403` si quien llama no es administrador; `404` si la unidad no existe; `409` si el email ya está registrado.
 
 **Login**
 
