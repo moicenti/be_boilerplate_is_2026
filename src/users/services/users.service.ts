@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
 import { UserRepository } from '@Users/repositories';
 import { EmailAlreadyTakenError, UnitNotFoundError } from '@Users/errors';
-import type { CreateUserDto } from '@Users/dto';
+import type { CreateUserDto, ListUsersQueryDto } from '@Users/dto';
 import type { EnvConfig } from '@Config';
 import { Role, type User } from '@PrismaClient';
 
@@ -48,6 +49,28 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  list({ role, activo }: ListUsersQueryDto): Promise<User[]> {
+    return this.userRepository.findManageable({ role, isActive: activo });
+  }
+
+  async deactivate(id: string): Promise<User> {
+    const target = await this.userRepository.findById(id);
+    if (!target) {
+      throw new NotFoundException('El usuario no existe.');
+    }
+    if (target.role === Role.ADMINISTRADOR) {
+      throw new ForbiddenException(
+        'Solo se pueden desactivar cuentas de residentes o de seguridad.',
+      );
+    }
+
+    const deactivated = await this.userRepository.deactivate(id, new Date());
+    if (!deactivated) {
+      throw new ConflictException('La cuenta ya está desactivada.');
+    }
+    return deactivated;
   }
 
   findByEmail(email: string): Promise<User | null> {

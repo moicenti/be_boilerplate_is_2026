@@ -25,7 +25,8 @@ export class ReservationRepository {
 
   findAllByUnit(unitId: string): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
-      where: { unitId },
+      // Las reservas de cuentas desactivadas ya no se muestran.
+      where: { unitId, resident: { isActive: true } },
       orderBy: { startsAt: 'desc' },
     });
   }
