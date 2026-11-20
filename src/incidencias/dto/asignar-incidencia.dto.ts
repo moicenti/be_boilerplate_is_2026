@@ -24,7 +24,7 @@ export class AsignarIncidenciaDto {
   @ApiProperty({
     format: 'uuid',
     example: '3e459034-e612-49e9-a921-4b98069e96b2',
-    description: 'ID del usuario de mantenimiento asignado',
+    description: 'ID del administrador responsable',
   })
   @IsUUID('4', { message: 'assigneeId debe ser un UUID válido' })
   assigneeId: string;

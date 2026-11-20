@@ -61,7 +61,7 @@ erDiagram
         uuid id PK
         string email UK
         uuid unit_id FK "nullable: el personal no tiene unidad"
-        Role role "RESIDENTE | ADMINISTRADOR | SEGURIDAD | MANTENIMIENTO"
+        Role role "RESIDENTE | ADMINISTRADOR | SEGURIDAD"
     }
 
     units {
@@ -323,7 +323,7 @@ Los módulos `paquetes` y `unidades` siguen las capas del boilerplate: `controll
 
 ### 6.3 Roles y unidades sin romper el módulo de incidencias
 
-- **`User.role`** tiene valor por defecto `RESIDENTE`: los usuarios existentes y el registro por `POST /users` siguen funcionando igual.
+- **`User.role`** tiene valor por defecto `RESIDENTE`: los usuarios existentes conservan ese rol. Las cuentas nuevas las crea un administrador con `POST /users` (rol `RESIDENTE` o `SEGURIDAD`).
 - **La tabla `units` nació independiente** para no cambiar el registro de usuarios de H7. Después el equipo unió las dos con la llave foránea `users.unit_id`, y H15 compara la unidad del residente con la del paquete por ese id.
 
 ### 6.4 Código de retiro de 6 dígitos guardado en texto

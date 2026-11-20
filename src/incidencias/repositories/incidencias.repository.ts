@@ -181,17 +181,18 @@ export class IncidenciaRepository {
   return result;
 }
 
-  async findMaintenanceUsers() {
+  // Los responsables de las incidencias son los administradores activos.
+  async findResponsibleUsers() {
     return this.prisma.user.findMany({
-      where: { role: 'MANTENIMIENTO', isActive: true },
+      where: { role: 'ADMINISTRADOR', isActive: true },
       select: { id: true, email: true, role: true },
       orderBy: { email: 'asc' },
     });
   }
 
-  async findActiveMaintenanceById(id: string) {
+  async findActiveResponsibleById(id: string) {
     return this.prisma.user.findFirst({
-      where: { id, role: 'MANTENIMIENTO', isActive: true },
+      where: { id, role: 'ADMINISTRADOR', isActive: true },
     });
   }
 
