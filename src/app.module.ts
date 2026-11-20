@@ -11,10 +11,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificacionesModule } from '@Notificaciones';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { IncidenciasModule } from '@Incidencias';
+import { IncidenciasModule } from './incidencias/incidencias.module.js';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
-import { AsambleasModule } from '@Asambleas';
 import { CommonAreasModule } from '@CommonAreas';
 import { ReservasModule } from '@Reservas';
 import { CuotasModule } from '@Cuotas';
@@ -22,7 +21,7 @@ import { PagosModule } from '@Pagos';
 import { AnunciosModule } from './anuncio/index.js';
 import { VisitasModule } from '@Visitas';
 import { DirectorioModule } from './directorio/index.js';
-import { ReportesModule } from './reportes/index.js';
+import { ReportesModule } from './reportes/index.js'; // <-- Ya incluido desde develop
 
 @Module({
   imports: [
@@ -38,14 +37,13 @@ import { ReportesModule } from './reportes/index.js';
     IncidenciasModule,
     UnidadesModule,
     PaquetesModule,
-    AsambleasModule,
     CommonAreasModule,
     VisitasModule,
     ReservasModule,
     CuotasModule,
     PagosModule,
     DirectorioModule,
-    ReportesModule,
+    ReportesModule, // <-- Módulo de H26/H30 ya registrado
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',

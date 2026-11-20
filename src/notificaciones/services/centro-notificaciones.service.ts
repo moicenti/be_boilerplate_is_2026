@@ -15,7 +15,6 @@ import { CentroNotificacionesRepository } from '@Notificaciones/repositories';
 export const TAMANO_MAXIMO_PAGINA = 20;
 const PAGINA_MAXIMA = 100_000;
 
-/** Convierte lo que llegue a un entero dentro de [min, max]; si no es número usa `defecto`. */
 function acotar(valor: unknown, defecto: number, min: number, max: number) {
   const n = Number(valor);
   if (valor === undefined || valor === null || !Number.isInteger(n)) {
@@ -44,7 +43,10 @@ export class CentroNotificacionesService {
       sesion.id,
       (page - 1) * size,
       size,
+      query.modulo, // <-- NUEVO: Pasar filtro de módulo
+      query.leidas, // <-- NUEVO: Pasar filtro de estado de lectura
     );
+
     return { total, page, size, items };
   }
 
@@ -52,7 +54,6 @@ export class CentroNotificacionesService {
     return { count: await this.repo.contarNoLeidas(sesion.id) };
   }
 
-  /** Marcar o desmarcar. Repetir el mismo estado no cambia nada (no pisa la fecha original). */
   async cambiarLeida(
     sesion: SesionResidente,
     id: number,
