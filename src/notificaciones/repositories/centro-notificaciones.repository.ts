@@ -31,6 +31,21 @@ export class CentroNotificacionesRepository {
     return { total, items };
   }
 
+  async marcarTodasLeidas(residenteId: string): Promise<number> {
+    const resultado = await this.prisma.notificacion.updateMany({
+      where: {
+        residenteId,
+        leida: false,
+        estado: { not: 'FALLIDO_PERMANENTE' }, // No marcamos las que fallaron permanentemente
+      },
+      data: {
+        leida: true,
+        fechaLectura: new Date(),
+      },
+    });
+    return resultado.count;
+  }
+
   contarNoLeidas(residenteId: string): Promise<number> {
     return this.prisma.notificacion.count({
       where: { residenteId, leida: false },
