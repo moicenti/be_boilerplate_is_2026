@@ -1,6 +1,6 @@
 # Módulo 6: Asambleas y votaciones digitales
 
-Responsable: Cristian Rodríguez · Historias implementadas: **H16. Convocar una asamblea con temas a votar** y **H17. Votar una sola vez por unidad** (sección 11).
+Responsable: Cristian Rodríguez · Historias implementadas: **H16. Convocar una asamblea con temas a votar**, **H17. Votar una sola vez por unidad** (sección 11) y **H18. Ver resultados claros y auditables** (sección 12).
 
 Este documento describe el modelo de datos, los endpoints, los flujos, el frontend y las decisiones de arquitectura del módulo, con su justificación.
 
@@ -309,7 +309,7 @@ Al cerrar H16 pasaban 105 pruebas unitarias y 52 de integración del proyecto.
 | Tema | Detalle |
 | --- | --- |
 | Documento de apoyo (PDF) | Está en el diseño pero no en las tasks; se dejó para el final si hay tiempo. Reutilizaría la subida de archivos de incidencias |
-| Resultados y auditoría | "Ver resultados" y la tarjeta de participación del diseño son de H18 |
+| Librería de PDF del Módulo 10 | BE-33.1 no estaba disponible; el PDF se genera con `pdfkit` detrás de `AuditDocumentRenderer` (ver 12) |
 | Notificar cambios | Editar una propuesta programada no envía un aviso nuevo a los residentes |
 | Destinatario "todos" | Si el Módulo 9 agrega ese tipo, `notifyCommunity` puede hacer una sola llamada en lugar de una por torre |
 
@@ -416,3 +416,64 @@ flowchart TD
 | Integración | `test/votos.e2e-spec.ts` | Voto válido visible para toda la unidad, segundo voto (409), solicitudes simultáneas, fuera del periodo (422), opción de otro tema (400), sin unidad (403), borrador (404), sin rutas PUT ni DELETE, tabla `votos` sin unidad y votos igual a participaciones |
 
 Al cerrar H17 pasaban 283 pruebas unitarias y 98 de integración del proyecto.
+
+## 12. H18. Ver resultados claros y auditables
+
+| Task | Descripción | Estado |
+| --- | --- | --- |
+| BE-18.1 | `GET /api/v1/temas/{temaId}/resultados` | Hecha |
+| BE-18.2 | `GET /api/v1/temas/{temaId}/auditoria` | Hecha |
+| BE-18.3 | `GET /api/v1/temas/{temaId}/auditoria/pdf` | Hecha |
+| BE-18.4 | Pruebas de integración | Hecha |
+| FE-18.1 | Pantalla de resultados | Hecha |
+| FE-18.2 | Auditoría con "Exportar PDF" | Hecha |
+| QA-18.1 | Pruebas de aceptación | Ver [QA-18.1](qa/QA-18.1.md) |
+
+### Endpoints (solo Administración; 403 para los demás roles)
+
+| Ruta | Votación programada o abierta | Votación cerrada |
+| --- | --- | --- |
+| `GET /temas/{id}/resultados` | Solo `unitsVoted` (cuántas unidades han votado); `results: null` | Votos y porcentaje por opción (2 decimales), `totalVotes`, `eligibleUnits`, `unitsVoted`, `participation`, `outcome` (`GANADOR`, `EMPATE` o `SIN_VOTOS`), `winner`, `tiedOptions` y `consistent` |
+| `GET /temas/{id}/auditoria` | 409 | Unidades que votaron con fecha y hora del voto (sin la opción), apertura, cierre, resultados y eventos del proceso |
+| `GET /temas/{id}/auditoria/pdf` | 409 | PDF `auditoria-{folio}-propuesta-{n}.pdf` con resultados, participación por unidad y eventos |
+
+### Cálculo (`src/asambleas/domain/results.ts`)
+
+- **Porcentaje por opción** = votos de la opción / total de votos, redondeado a 2 decimales.
+- **Unidades habilitadas** = unidades registradas al momento de la apertura del tema (`units.created_at <= opens_at`); es la decisión 6 del análisis. El reporte de participación del Módulo 10 (H29) cuenta en cambio las unidades activas al momento de consultarlo, por eso sus totales pueden diferir de los de esta pantalla.
+- **Participación** = unidades que votaron / unidades habilitadas.
+- **Ganador** = la opción con más votos; si dos o más comparten el máximo, **Empate**; sin votos, ninguno.
+- **`consistent`** verifica el invariante del criterio: la suma de votos de todas las opciones es igual al número de unidades que votaron. La pantalla y el PDF lo muestran.
+
+### Auditoría
+
+Se combinan los dos enfoques:
+- **Lo que pide el criterio:** la tabla de **participación por unidad**, con unidad y fecha y hora del voto.
+- **Lo que muestra el diseño:** los **eventos del proceso** (convocatoria publicada, votación abierta con el padrón fijado, votación cerrada y recuento consolidado).
+
+En ningún caso aparece la opción elegida: la tabla `votos` no tiene la unidad, así que la base no puede relacionarlas.
+
+### PDF detrás de una interfaz
+
+La task pedía reutilizar la librería de documentos de BE-33.1 (Módulo 10), que no estaba disponible al implementar H18. El PDF se genera con `pdfkit` en `AuditPdfService`, registrado como implementación de la clase abstracta `AuditDocumentRenderer`. Si el Módulo 10 publica su librería, basta con registrar otra implementación en `asambleas.module.ts`; el controlador y el servicio no cambian.
+
+### Frontend
+
+`/admin/asambleas/{id}/resultados` sigue el diseño de Jira:
+- participación final;
+- recuento agregado por opción con barras;
+- total emitido con la suma visible ("a + b + c = total") y la verificación;
+- ganador o empate;
+- tabla de eventos y de participación por unidad;
+- "Exportar PDF", deshabilitado durante la descarga y con error y reintento.
+
+Con la votación abierta solo se ve cuántas unidades han votado. Se llega desde "Ver resultados" en el listado, la tarjeta "Última votación cerrada" y el detalle de la convocatoria.
+
+### Pruebas
+
+| Tipo | Archivo | Qué cubre |
+| --- | --- | --- |
+| Unitarias | `src/asambleas/domain/results.spec.ts` | Porcentajes con 2 decimales, participación, ganador, empate, sin votos y verificación de la suma |
+| Integración | `test/resultados.e2e-spec.ts` | Resultados de un tema cerrado (con unidades registradas después de abrir que no cuentan), ganador, suma de votos igual a participaciones, resultados ocultos con la votación abierta, auditoría sin la opción y con eventos, 409 antes del cierre, PDF y control de roles |
+
+Al cerrar H18 pasaban 288 pruebas unitarias y 106 de integración del proyecto.
