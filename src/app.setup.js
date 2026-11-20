@@ -1,0 +1,15 @@
+import { ValidationPipe } from '@nestjs/common';
+export const API_PREFIX = 'api/v1';
+export function configureApp(app) {
+    // Versionado en la URI: /api/v1/...
+    app.setGlobalPrefix(API_PREFIX);
+    app.useGlobalPipes(new ValidationPipe({
+        // Descarta propiedades que no estén en el DTO...
+        whitelist: true,
+        // ...y además rechaza la request con 400 si vienen de más, en vez de
+        // ignorarlas en silencio.
+        forbidNonWhitelisted: true,
+        // Convierte el payload al tipo del DTO (los query/params llegan string).
+        transform: true,
+    }));
+}
