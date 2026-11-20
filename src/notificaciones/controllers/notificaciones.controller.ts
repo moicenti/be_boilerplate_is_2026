@@ -30,7 +30,9 @@ export class NotificacionesController {
   constructor(private readonly centro: CentroNotificacionesService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Listar mis notificaciones, de la más reciente a la más antigua' })
+  @ApiOperation({
+    summary: 'Listar mis notificaciones, de la más reciente a la más antigua',
+  })
   listar(
     @CurrentUser() sesion: SesionResidente,
     @Query() query: ListarNotificacionesQueryDto,
@@ -40,9 +42,17 @@ export class NotificacionesController {
 
   // Va antes de ':id/...' por claridad; no choca porque ese es PATCH.
   @Get('no-leidas/conteo')
-  @ApiOperation({ summary: 'Número de notificaciones sin leer (indicador del encabezado)' })
+  @ApiOperation({
+    summary: 'Número de notificaciones sin leer (indicador del encabezado)',
+  })
   contarNoLeidas(@CurrentUser() sesion: SesionResidente) {
     return this.centro.contarNoLeidas(sesion);
+  }
+
+  @Patch('leidas/todas')
+  @ApiOperation({ summary: 'Marcar todas mis notificaciones como leídas' })
+  marcarTodasLeidas(@CurrentUser() sesion: SesionResidente) {
+    return this.centro.marcarTodasLeidas(sesion);
   }
 
   @Patch(':id/leida')
@@ -54,4 +64,5 @@ export class NotificacionesController {
   ) {
     return this.centro.cambiarLeida(sesion, id, dto.leida);
   }
+
 }
