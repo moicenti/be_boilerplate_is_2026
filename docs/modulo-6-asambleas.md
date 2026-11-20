@@ -294,7 +294,7 @@ Al cerrar H16 pasaban 105 pruebas unitarias y 52 de integración del proyecto.
 
 ## 9. Datos de prueba
 
-`npm run db:seed` crea, si no existen, cinco asambleas con fechas relativas al momento de correrlo, convocadas por `admin@example.com` (contraseña `Demo1234!`):
+`npm run db:seed` crea, si no existen, cinco asambleas con fechas relativas al momento de correrlo, convocadas por `admin@example.com` (contraseña la de `SEED_DEMO_PASSWORD`):
 
 | Asamblea | Estado al correr el seed |
 | --- | --- |

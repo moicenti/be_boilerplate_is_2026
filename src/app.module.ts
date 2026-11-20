@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule, minutes } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from '@Auth';
 import { JwtAuthGuard, RolesGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
 import { PrismaModule } from '@Prisma';
 import { UsersModule } from '@Users';
-import { validateEnv } from '@Config';
+import { validateEnv, type EnvConfig } from '@Config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificacionesModule } from '@Notificaciones';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -29,6 +30,17 @@ import { VisitasModule } from '@Visitas';
       cache: true,
       // Si falta DATABASE_URL o JWT_SECRET, la app no arranca.
       validate: validateEnv,
+    }),
+    // Límite general por IP. Las rutas sensibles (login, registro) lo bajan
+    // con @Throttle. Memoria local: alcanza con una sola instancia.
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) => ({
+        throttlers: [{ name: 'default', ttl: minutes(1), limit: 300 }],
+        errorMessage: 'Demasiadas solicitudes. Intenta de nuevo en unos minutos.',
+        // Los e2e inician sesión decenas de veces desde la misma IP.
+        skipIf: () => config.get('NODE_ENV', { infer: true }) === 'test',
+      }),
     }),
     PrismaModule,
     HealthModule,
@@ -61,6 +73,11 @@ import { VisitasModule } from '@Visitas';
     AnunciosModule,
   ],
   providers: [
+    {
+      // Primero: corta los excesos antes de verificar el JWT o tocar la base.
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       // Todo cerrado por defecto: las rutas públicas se abren con @Public().
       provide: APP_GUARD,

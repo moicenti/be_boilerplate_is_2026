@@ -76,10 +76,10 @@ cp .env.example .env
 |---|---|---|
 | `NODE_ENV` | `development` | Entorno de ejecución |
 | `PORT` | `3000` | Puerto HTTP de la API |
-| `POSTGRES_USER` | `postgres` | Usuario que crea el contenedor de Postgres |
-| `POSTGRES_PASSWORD` | `postgres` | Contraseña de ese usuario |
+| `POSTGRES_USER` | — | **Obligatoria para Compose.** Usuario que crea el contenedor de Postgres |
+| `POSTGRES_PASSWORD` | — | **Obligatoria para Compose.** Contraseña de ese usuario |
 | `POSTGRES_DB` | `si_be_boilerplate` | Base que se crea al inicializar |
-| `POSTGRES_PORT` | `5432` | Puerto publicado en el host |
+| `POSTGRES_PORT` | `5432` | Puerto publicado en el host (solo en `127.0.0.1`) |
 | `DATABASE_URL` | — | **Obligatoria.** Connection string de Prisma |
 | `JWT_SECRET` | — | **Obligatoria.** Mínimo 32 caracteres |
 | `JWT_EXPIRES_IN` | `15m` | Vigencia del access token |
@@ -87,6 +87,8 @@ cp .env.example .env
 | `BCRYPT_SALT_ROUNDS` | `12` | Cost factor de bcrypt |
 | `APP_TIMEZONE` | `America/El_Salvador` | Zona horaria IANA en la que se interpretan los horarios de las áreas comunes |
 | `PAGO_SIMULADO_ESPERA_MS` | `5000` | Espera de la pasarela de pago simulada (H1). Las pruebas e2e la ponen en `0` |
+| `TRUST_PROXY_HOPS` | `0` | Proxies delante de la API (Render: `1`). El rate limit usa la IP del cliente que reporta el último proxy |
+| `SEED_DEMO_PASSWORD` | — | **Obligatoria para el seed.** Contraseña de todas las cuentas demo (12-72 caracteres, minúscula, mayúscula y número). Correr el seed de nuevo la rota |
 
 > La app **valida el entorno al arrancar** ([env.validation.ts](src/config/env.validation.ts)). Si falta `DATABASE_URL` o `JWT_SECRET`, o si el secreto es más corto que 32 caracteres, falla de inmediato con un mensaje claro en lugar de romperse más tarde.
 
@@ -251,9 +253,9 @@ npm run db:reset
 
 | Email | Contraseña |
 |---|---|
-| `demo@example.com` | `Demo1234!` |
-| `otro@example.com` | `Demo1234!` |
-| `admin@example.com` (rol `ADMINISTRADOR`) | `Demo1234!` |
+| `demo@example.com` | la de `SEED_DEMO_PASSWORD` |
+| `otro@example.com` | la de `SEED_DEMO_PASSWORD` |
+| `admin@example.com` (rol `ADMINISTRADOR`) | la de `SEED_DEMO_PASSWORD` |
 
 Los usuarios nuevos se crean con rol `RESIDENTE`. Los endpoints restringidos por rol usan `@Roles(Role.ADMINISTRADOR)` junto con `@UseGuards(RolesGuard)` y responden `403 ROL_NO_PERMITIDO`.
 
@@ -362,7 +364,7 @@ La contraseña debe tener entre 8 y 72 caracteres, con al menos una minúscula, 
 ```bash
 curl -X POST $BASE/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"demo@example.com","password":"Demo1234!"}'
+  -d '{"email":"demo@example.com","password":"<SEED_DEMO_PASSWORD>"}'
 ```
 
 ```jsonc
@@ -562,7 +564,7 @@ Un parámetro desconocido o inválido responde `400 SOLICITUD_INVALIDA`.
 
 ### Datos demo (QA-2.1)
 
-Con `npm run db:seed` quedan en mora A-19 y A-20 (Torre A, datos de H1), las 18 cuotas generadas de la Torre C (H34) y **B-402** (dos cuotas vencidas hace 87 y 56 días). No deben aparecer **B-205** (cuota vencida pero pagada), **B-103** (vence el día en que se corre el seed) ni **A-202** (vence en 10 días). Los residentes de la Torre B (`elena.ruiz@`, `jorge.salas@`, `sofia.herrera@example.com`) usan la contraseña `Demo1234!`.
+Con `npm run db:seed` quedan en mora A-19 y A-20 (Torre A, datos de H1), las 18 cuotas generadas de la Torre C (H34) y **B-402** (dos cuotas vencidas hace 87 y 56 días). No deben aparecer **B-205** (cuota vencida pero pagada), **B-103** (vence el día en que se corre el seed) ni **A-202** (vence en 10 días). Los residentes de la Torre B (`elena.ruiz@`, `jorge.salas@`, `sofia.herrera@example.com`) usan la contraseña la de `SEED_DEMO_PASSWORD`.
 
 ## Arquitectura por capas
 

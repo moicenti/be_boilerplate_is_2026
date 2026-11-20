@@ -394,7 +394,7 @@ Las pruebas de aceptación con los criterios de negocio están en [QA-13.1](qa/Q
 
 ## 8. Datos de prueba
 
-`npm run db:seed` crea las unidades A-19, A-20, A-202, A-304, B-103, B-205 y B-402, y estos usuarios (contraseña `Demo1234!`):
+`npm run db:seed` crea las unidades A-19, A-20, A-202, A-304, B-103, B-205 y B-402, y estos usuarios (contraseña la de `SEED_DEMO_PASSWORD`):
 
 | Correo | Rol |
 | --- | --- |
