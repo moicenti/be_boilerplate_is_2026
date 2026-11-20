@@ -17,10 +17,12 @@ import { detectImageType, extensionFor } from '../utils/file-signature.js';
  */
 @Injectable()
 export class ImageValidationInterceptor implements NestInterceptor {
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<unknown>> {
     const request = context.switchToHttp().getRequest();
     const files: Express.Multer.File[] = request.files ?? [];
-
     if (files.length === 0) {
       return next.handle();
     }
@@ -29,7 +31,6 @@ export class ImageValidationInterceptor implements NestInterceptor {
       for (const file of files) {
         const buffer = await fs.readFile(file.path);
         const type = detectImageType(buffer);
-
         const newExt = extensionFor(type);
         const basePath = file.path.replace(/\.[^.]+$/, '');
         const newPath = `${basePath}${newExt}`;
@@ -40,15 +41,22 @@ export class ImageValidationInterceptor implements NestInterceptor {
           file.filename = `${file.filename.replace(/\.[^.]+$/, '')}${newExt}`;
         }
 
-        // Forzar mimetype según la firma
         file.mimetype = type === 'jpeg' ? 'image/jpeg' : 'image/png';
       }
     } catch (error) {
-      // Limpiar archivos subidos si la validación falla
-      await Promise.allSettled(files.map((f) => fs.unlink(f.path).catch(() => undefined)));
-      const message = error instanceof Error ? error.message : 'Archivo inválido.';
+      console.error('IMAGE VALIDATION ERROR:', error);
+
+      await Promise.allSettled(
+        files.map((f) => fs.unlink(f.path).catch(() => undefined)),
+      );
+
+      const message = error instanceof Error
+        ? error.message
+        : 'Archivo inválido.';
+
       throw new BadRequestException(message);
     }
+
 
     return next.handle();
   }

@@ -144,7 +144,7 @@ async activas() {
 async countActivas() {
   return this.visitaService.countActivas();
 }
-
+  
   
   
 }

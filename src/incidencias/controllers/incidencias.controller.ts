@@ -91,13 +91,16 @@ export class IncidenciasController {
   @ApiResponse({ status: 400, description: 'Datos inválidos o unidad no asignada.' })
   @ApiResponse({ status: 401, description: 'No autenticado.' })
   async create(
-    @CurrentUser() user: User,
-    @Body() dto: CreateIncidenciaDto,
-    @UploadedFiles() files: Express.Multer.File[],
-  ) {
-    const photoUrls = files ? files.map((f) => `/uploads/${f.filename}`) : [];
-    return this.incidenciasService.create(user, dto, photoUrls);
-  }
+  @CurrentUser() user: User,
+  @Body() dto: CreateIncidenciaDto,
+  @UploadedFiles() files: Express.Multer.File[],
+) {
+ 
+
+  const photoUrls = files ? files.map((f) => `/uploads/${f.filename}`) : [];
+
+  return this.incidenciasService.create(user, dto, photoUrls);
+}
 
   @Get()
   @ApiOperation({ summary: 'Listar mis reportes' })

@@ -27,7 +27,9 @@ export class PreautorizacionService {
     user: { id: string; unitId?: string | null; unit?: Unit | null },
     data: CreatePreautorizacionDto,
   ) {
-    if (!user.unitId) {
+    // FIX: usar unit?.id como fallback si unitId no está poblado
+    const unidadId = user.unitId ?? user.unit?.id;
+    if (!unidadId) {
       throw new BadRequestException(
         'Tu usuario no tiene una unidad asignada. Contacta a la administración.',
       );
@@ -38,11 +40,15 @@ export class PreautorizacionService {
     const ahora = new Date();
 
     if (inicio < ahora) {
-      throw new BadRequestException('La fecha de inicio no puede ser anterior a la actual.');
+      throw new BadRequestException(
+        'La fecha de inicio no puede ser anterior a la actual.',
+      );
     }
 
     if (fin <= inicio) {
-      throw new BadRequestException('La fecha de fin debe ser posterior al inicio.');
+      throw new BadRequestException(
+        'La fecha de fin debe ser posterior al inicio.',
+      );
     }
 
     const diffHoras = (fin.getTime() - inicio.getTime()) / (1000 * 60 * 60);
@@ -65,7 +71,7 @@ export class PreautorizacionService {
       codigo = generarCodigo();
     }
 
-    return this.repo.create(user.id, user.unitId, codigo, data);
+    return this.repo.create(user.id, unidadId, codigo, data);
   }
 
   async findAll(userId: string) {
@@ -81,7 +87,6 @@ export class PreautorizacionService {
   }
 
   async buscar(query: string) {
-  return this.repo.buscar(query);
-}
-
+    return this.repo.buscar(query);
+  }
 }
