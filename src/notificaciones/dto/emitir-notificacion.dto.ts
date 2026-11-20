@@ -1,17 +1,7 @@
+// El catálogo de módulos vive en un solo lugar (H23/H25).
+import type { ModuloNotificacion } from './modulos-notificacion.js';
+
 export type TipoDestinatario = 'RESIDENTE' | 'UNIDAD' | 'GRUPO';
-
-// Catálogo estricto de 7 módulos según diseño técnico H23/H25
-export const MODULOS_NOTIFICACION = [
-  'pagos',
-  'reservas',
-  'incidencias',
-  'visitas',
-  'paqueteria', // Ojo: es paqueteria, no paquetes
-  'votaciones',
-  'anuncios',
-] as const;
-
-export type ModuloNotificacion = (typeof MODULOS_NOTIFICACION)[number];
 
 export interface DestinatarioDto {
   tipo: TipoDestinatario;
