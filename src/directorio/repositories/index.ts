@@ -1,0 +1,1 @@
+export * from './directorio.repository.js';
