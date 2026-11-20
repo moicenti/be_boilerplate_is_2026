@@ -6,6 +6,8 @@ import {
   MorosidadIndicador,
   OcupacionIndicador,
   ParticipacionIndicador,
+  ReporteIncidenciasService,
+  ReporteParticipacionService,
   ResumenService,
 } from '@Reportes/services';
 
@@ -18,6 +20,8 @@ import {
     OcupacionIndicador,
     IncidenciasIndicador,
     ParticipacionIndicador,
+    ReporteIncidenciasService,
+    ReporteParticipacionService,
   ],
 })
 export class ReportesModule {}
