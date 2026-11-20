@@ -1,7 +1,9 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsEnum } from 'class-validator';
+import { MODULOS_NOTIFICACION } from './emitir-notificacion.dto.js'; // Reutiliza el catálogo de H23
 
-/** GET /notificaciones?page=1&size=20. El tope de 20 por página se aplica en el servicio. */
+export type FiltroLeidas = 'todas' | 'sin_leer' | 'leidas';
+
 export class ListarNotificacionesQueryDto {
   @IsOptional()
   @Type(() => Number)
@@ -12,4 +14,18 @@ export class ListarNotificacionesQueryDto {
   @Type(() => Number)
   @IsInt()
   size?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(MODULOS_NOTIFICACION, {
+    message: `Módulo inválido. Debe ser uno de: ${MODULOS_NOTIFICACION.join(', ')}`,
+  })
+  modulo?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsEnum(['todas', 'sin_leer', 'leidas'], {
+    message: "El filtro 'leidas' debe ser 'todas', 'sin_leer' o 'leidas'",
+  })
+  leidas?: FiltroLeidas;
 }

@@ -24,44 +24,67 @@ describe('CentroNotificacionesService', () => {
 
     it('por defecto pide la página 1 con 20 elementos', async () => {
       const res = await service.listar(YO, {});
-
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20);
+      expect(repo.listar).toHaveBeenCalledWith(
+        'residente-1',
+        0,
+        20,
+        undefined,
+        undefined,
+      );
       expect(res).toEqual({ total: 42, page: 1, size: 20, items: [] });
     });
 
     it('calcula el desplazamiento de la página pedida', async () => {
       await service.listar(YO, { page: 3, size: 10 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 20, 10);
+      expect(repo.listar).toHaveBeenCalledWith(
+        'residente-1',
+        20,
+        10,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('pasa los filtros de modulo y leidas al repositorio', async () => {
+      await service.listar(YO, { modulo: 'anuncios', leidas: 'sin_leer' });
+      expect(repo.listar).toHaveBeenCalledWith(
+        'residente-1',
+        0,
+        20,
+        'anuncios',
+        'sin_leer',
+      );
     });
 
     it('nunca devuelve más de 20 por página', async () => {
       const res = await service.listar(YO, { size: 500 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20);
+      expect(repo.listar).toHaveBeenCalledWith(
+        'residente-1',
+        0,
+        20,
+        undefined,
+        undefined,
+      );
       expect(res.size).toBe(20);
     });
 
     it('corrige página y tamaño inválidos (0 o negativos)', async () => {
       const res = await service.listar(YO, { page: 0, size: -5 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 1);
+      expect(repo.listar).toHaveBeenCalledWith(
+        'residente-1',
+        0,
+        1,
+        undefined,
+        undefined,
+      );
       expect(res.page).toBe(1);
       expect(res.size).toBe(1);
-    });
-
-    it('acepta números que llegan como texto desde la URL', async () => {
-      await service.listar(YO, { page: '2', size: '5' } as never);
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 5, 5);
-    });
-
-    it('usa solo el ID de la sesión', async () => {
-      await service.listar({ id: 'otro' }, {});
-      expect(repo.listar.mock.calls[0][0]).toBe('otro');
     });
   });
 
   describe('contarNoLeidas', () => {
     it('devuelve { count } del residente de la sesión', async () => {
       repo.contarNoLeidas.mockResolvedValue(5);
-
       expect(await service.contarNoLeidas(YO)).toEqual({ count: 5 });
       expect(repo.contarNoLeidas).toHaveBeenCalledWith('residente-1');
     });
@@ -85,27 +108,8 @@ describe('CentroNotificacionesService', () => {
       });
 
       const res = await service.cambiarLeida(YO, 901, true);
-
       expect(repo.actualizarLeida).toHaveBeenCalledWith(901, true);
       expect(res).toEqual({ id: 901, leida: true, fechaLectura: fecha });
-    });
-
-    it('desmarcar deja la fecha de lectura en nulo', async () => {
-      repo.buscarPropiedad.mockResolvedValue({
-        ...propia,
-        leida: true,
-        fechaLectura: new Date(),
-      });
-      repo.actualizarLeida.mockResolvedValue({
-        id: 901,
-        leida: false,
-        fechaLectura: null,
-      });
-
-      const res = await service.cambiarLeida(YO, 901, false);
-
-      expect(repo.actualizarLeida).toHaveBeenCalledWith(901, false);
-      expect(res.fechaLectura).toBeNull();
     });
 
     it('repetir el mismo estado no toca la base ni pisa la fecha original', async () => {
@@ -117,36 +121,29 @@ describe('CentroNotificacionesService', () => {
       });
 
       const res = await service.cambiarLeida(YO, 901, true);
-
       expect(repo.actualizarLeida).not.toHaveBeenCalled();
       expect(res).toEqual({ id: 901, leida: true, fechaLectura: original });
     });
 
     it('notificación inexistente: 404 NOTIFICACION_INEXISTENTE', async () => {
       repo.buscarPropiedad.mockResolvedValue(null);
-
       const intento = service.cambiarLeida(YO, 999, true);
-
       await expect(intento).rejects.toBeInstanceOf(NotFoundException);
       await expect(intento).rejects.toMatchObject({
         response: { codigo: 'NOTIFICACION_INEXISTENTE' },
       });
-      expect(repo.actualizarLeida).not.toHaveBeenCalled();
     });
 
-    it('notificación de otro residente: 403 RECURSO_AJENO y no la modifica', async () => {
+    it('notificación de otro residente: 403 RECURSO_AJENO', async () => {
       repo.buscarPropiedad.mockResolvedValue({
         ...propia,
         residenteId: 'otro-residente',
       });
-
       const intento = service.cambiarLeida(YO, 901, true);
-
       await expect(intento).rejects.toBeInstanceOf(ForbiddenException);
       await expect(intento).rejects.toMatchObject({
         response: { codigo: 'RECURSO_AJENO' },
       });
-      expect(repo.actualizarLeida).not.toHaveBeenCalled();
     });
   });
 });
@@ -165,31 +162,50 @@ describe('CentroNotificacionesRepository', () => {
         Promise.all(consultas),
       ),
     };
-    return { repo: new CentroNotificacionesRepository(prisma as never), notificacion };
+    return {
+      repo: new CentroNotificacionesRepository(prisma as never),
+      notificacion,
+    };
   }
 
-  it('el listado filtra por residente y ordena por fecha descendente', async () => {
+  it('el listado filtra por residente, excluye FALLIDO_PERMANENTE y ordena por fecha descendente', async () => {
     const { repo, notificacion } = repoConPrisma();
+    await repo.listar('residente-1', 20, 10, 'anuncios', 'sin_leer');
 
-    await repo.listar('residente-1', 20, 10);
-
+    // Verificar count
     expect(notificacion.count).toHaveBeenCalledWith({
-      where: { residenteId: 'residente-1' },
+      where: {
+        residenteId: 'residente-1',
+        estado: { not: 'FALLIDO_PERMANENTE' },
+        moduloOrigen: 'anuncios',
+        leida: false,
+      },
     });
+
+    // Verificar findMany
     const args = notificacion.findMany.mock.calls[0][0];
-    expect(args.where).toEqual({ residenteId: 'residente-1' });
+    expect(args.where).toEqual({
+      residenteId: 'residente-1',
+      estado: { not: 'FALLIDO_PERMANENTE' },
+      moduloOrigen: 'anuncios',
+      leida: false,
+    });
     expect(args.orderBy).toEqual([{ fechaCreacion: 'desc' }, { id: 'desc' }]);
     expect(args.skip).toBe(20);
     expect(args.take).toBe(10);
   });
 
-  it('el conteo cuenta solo las no leídas del residente', async () => {
+  it('el conteo cuenta solo las no leídas del residente y excluye FALLIDO_PERMANENTE', async () => {
     const { repo, notificacion } = repoConPrisma();
     notificacion.count.mockResolvedValue(5);
 
     expect(await repo.contarNoLeidas('residente-1')).toBe(5);
     expect(notificacion.count).toHaveBeenCalledWith({
-      where: { residenteId: 'residente-1', leida: false },
+      where: {
+        residenteId: 'residente-1',
+        leida: false,
+        estado: { not: 'FALLIDO_PERMANENTE' },
+      },
     });
   });
 

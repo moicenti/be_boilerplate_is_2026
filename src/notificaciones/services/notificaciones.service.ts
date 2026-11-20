@@ -9,13 +9,15 @@ import type {
   EmitirNotificacionDto,
   EmitirResultado,
 } from '@Notificaciones/dto';
+// ✅ CORRECCIÓN 1: Importar el valor del catálogo por separado (no como 'type')
+import { MODULOS_NOTIFICACION } from '@Notificaciones/dto';
 import {
   DestinatariosRepository,
   NotificacionRepository,
 } from '@Notificaciones/repositories';
 import { EnvioService } from './envio.service.js';
 
-const ROL_ADMINISTRADOR = 'ADMINISTRADOR'; // valor del enum Role de H13
+const ROL_ADMINISTRADOR = 'ADMINISTRADOR';
 const TIPOS_DESTINATARIO = ['RESIDENTE', 'UNIDAD', 'GRUPO'];
 
 @Injectable()
@@ -26,10 +28,6 @@ export class NotificacionesService {
     private readonly envio: EnvioService,
   ) {}
 
-  /**
-   * Convierte un aviso en una notificación por residente.
-   * `emisor` es quien lo emite (lo pasa el módulo que llama, desde la sesión).
-   */
   async emitir(
     dto: EmitirNotificacionDto,
     emisor?: Emisor,
@@ -52,13 +50,13 @@ export class NotificacionesService {
       });
     }
 
-    // Forzada ignora las preferencias. Sin registro de preferencia se asume activo.
     const apagados = forzada
       ? new Set<string>()
       : await this.destinatarios.desactivados(
           residentes.map((r) => r.id),
           dto.moduloOrigen,
         );
+
     const destinos = residentes
       .filter((r) => !apagados.has(r.id))
       .map((r) => ({ residenteId: r.id, unidadId: r.unidadId }));
@@ -76,7 +74,6 @@ export class NotificacionesService {
       destinos,
     );
 
-    // Primer intento inmediato. Si falla, lo retoma la tarea programada.
     for (const n of await this.notificaciones.porLote(loteId)) {
       await this.envio.procesar(n);
     }
@@ -97,12 +94,22 @@ export class NotificacionesService {
       throw invalida('El destinatario es obligatorio');
     }
     if (!TIPOS_DESTINATARIO.includes(d.tipo)) {
-      throw invalida('El tipo de destinatario debe ser RESIDENTE, UNIDAD o GRUPO');
+      throw invalida(
+        'El tipo de destinatario debe ser RESIDENTE, UNIDAD o GRUPO',
+      );
     }
     if (!dto.tipo?.trim()) throw invalida('El tipo es obligatorio');
     if (!dto.mensaje?.trim()) throw invalida('El mensaje es obligatorio');
-    if (!dto.moduloOrigen?.trim()) {
-      throw invalida('El módulo de origen es obligatorio');
+
+    // ✅ CORRECCIÓN 2: Validación estricta del catálogo de 7 módulos
+    if (
+      !dto.moduloOrigen ||
+      !(MODULOS_NOTIFICACION as readonly string[]).includes(dto.moduloOrigen)
+    ) {
+      throw new BadRequestException({
+        codigo: 'MODULO_INVALIDO',
+        mensaje: `El módulo debe ser uno de: ${MODULOS_NOTIFICACION.join(', ')}`,
+      });
     }
   }
 }
