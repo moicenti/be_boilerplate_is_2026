@@ -1,12 +1,14 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
   Put,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -17,11 +19,17 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiProduces,
   ApiTags,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { AsambleasService, VotosService } from '@Asambleas/services';
+import {
+  AsambleasService,
+  AuditDocumentRenderer,
+  ResultadosService,
+  VotosService,
+} from '@Asambleas/services';
 import {
   AssemblyResponseDto,
   CastVoteDto,
@@ -37,6 +45,8 @@ export class TemasController {
   constructor(
     private readonly asambleasService: AsambleasService,
     private readonly votosService: VotosService,
+    private readonly resultadosService: ResultadosService,
+    private readonly auditRenderer: AuditDocumentRenderer,
   ) {}
 
   @Put(':temaId')
@@ -86,5 +96,59 @@ export class TemasController {
       ...receipt,
       message: 'Tu voto quedó registrado. Tu unidad ya votó en este tema.',
     };
+  }
+
+  @Get(':temaId/resultados')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'Resultados de la votación de un tema',
+    description:
+      'Con la votación abierta solo devuelve cuántas unidades han votado. Cerrada: votos y porcentaje por opción, unidades habilitadas (registradas al abrir), participación y ganador o empate.',
+  })
+  @ApiOkResponse({ description: 'Resultados del tema.' })
+  @ApiNotFoundResponse({ description: 'La propuesta no existe.' })
+  @ApiForbiddenResponse({ description: 'Solo administración.' })
+  results(@Param('temaId', ParseUUIDPipe) temaId: string) {
+    return this.resultadosService.results(temaId);
+  }
+
+  @Get(':temaId/auditoria')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'Auditoría de un tema cerrado',
+    description:
+      'Unidades que votaron con la fecha y hora de su voto (sin la opción), apertura, cierre y eventos del proceso.',
+  })
+  @ApiOkResponse({ description: 'Auditoría del tema.' })
+  @ApiNotFoundResponse({ description: 'La propuesta no existe.' })
+  @ApiConflictResponse({ description: 'La votación no ha cerrado.' })
+  @ApiForbiddenResponse({ description: 'Solo administración.' })
+  audit(@Param('temaId', ParseUUIDPipe) temaId: string) {
+    return this.resultadosService.audit(temaId);
+  }
+
+  @Get(':temaId/auditoria/pdf')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary:
+      'Exporta en PDF los resultados y la participación de un tema cerrado',
+  })
+  @ApiProduces('application/pdf')
+  @ApiOkResponse({ description: 'Documento PDF.' })
+  @ApiNotFoundResponse({ description: 'La propuesta no existe.' })
+  @ApiConflictResponse({ description: 'La votación no ha cerrado.' })
+  @ApiForbiddenResponse({ description: 'Solo administración.' })
+  async auditPdf(
+    @Param('temaId', ParseUUIDPipe) temaId: string,
+  ): Promise<StreamableFile> {
+    const audit = await this.resultadosService.audit(temaId);
+    const pdf = await this.auditRenderer.render(audit, (date) =>
+      this.resultadosService.format(date),
+    );
+    const filename = `auditoria-${audit.assembly.folio}-propuesta-${audit.topic.position + 1}.pdf`;
+    return new StreamableFile(pdf, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${filename}"`,
+    });
   }
 }
