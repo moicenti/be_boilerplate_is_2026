@@ -22,13 +22,14 @@ import { CuotasModule } from '@Cuotas';
 import { PagosModule } from '@Pagos';
 import { AnunciosModule } from './anuncio/index.js';
 import { VisitasModule } from '@Visitas';
+import { DirectorioModule } from './directorio/index.js';
+import { ReportesModule } from './reportes/index.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      // Si falta DATABASE_URL o JWT_SECRET, la app no arranca.
       validate: validateEnv,
     }),
     // Límite general por IP. Las rutas sensibles (login, registro) lo bajan
@@ -55,19 +56,21 @@ import { VisitasModule } from '@Visitas';
     ReservasModule,
     CuotasModule,
     PagosModule,
+    DirectorioModule,
+    ReportesModule,
     ServeStaticModule.forRoot({
-   rootPath: join(process.cwd(), 'uploads'),
-    serveRoot: '/uploads',
-    serveStaticOptions: {
-      index: false,
-      fallthrough: false,
-      setHeaders: (res) => {
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Content-Disposition', 'inline');
-      res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
-    },
-  },
-}),
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+      serveStaticOptions: {
+        index: false,
+        fallthrough: false,
+        setHeaders: (res) => {
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Content-Disposition', 'inline');
+          res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+        },
+      },
+    }),
     ScheduleModule.forRoot(),
     NotificacionesModule,
     AnunciosModule,

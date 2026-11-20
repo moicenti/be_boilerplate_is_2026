@@ -1,8 +1,20 @@
 export type TipoDestinatario = 'RESIDENTE' | 'UNIDAD' | 'GRUPO';
 
+// Catálogo estricto de 7 módulos según diseño técnico H23/H25
+export const MODULOS_NOTIFICACION = [
+  'pagos',
+  'reservas',
+  'incidencias',
+  'visitas',
+  'paqueteria', // Ojo: es paqueteria, no paquetes
+  'votaciones',
+  'anuncios',
+] as const;
+
+export type ModuloNotificacion = (typeof MODULOS_NOTIFICACION)[number];
+
 export interface DestinatarioDto {
   tipo: TipoDestinatario;
-  /** residente: uuid del usuario · unidad: uuid de la unidad · grupo: nombre de la torre */
   id: string;
 }
 
@@ -11,12 +23,11 @@ export interface EmitirNotificacionDto {
   tipo: string;
   titulo?: string;
   mensaje: string;
-  moduloOrigen: string;
+  moduloOrigen: ModuloNotificacion; // <-- Cambiado a tipo estricto
   enlaceAccion?: string;
   forzada?: boolean;
 }
 
-/** Quién emite. Sale de la sesión del módulo que llama, nunca del cuerpo de una petición. */
 export interface Emisor {
   id: string;
   rol: string;
