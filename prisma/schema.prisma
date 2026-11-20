@@ -585,3 +585,25 @@ model VotingOption {
   @@unique([topicId, text])
   @@map("opciones_votacion")
 }
+
+// ─── STUBS para permitir que Prisma compile (H2/H3 pendientes) ───
+model FeeRule {
+  id        Int     @id @default(autoincrement())
+  createdBy String? @map("created_by") @db.Uuid
+  creator   User?   @relation("FeeRuleCreatedBy", fields: [createdBy], references: [id])
+  @@map("fee_rule")
+}
+
+model FeeRuleChange {
+  id     Int    @id @default(autoincrement())
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+  @@map("fee_rule_change")
+}
+
+model GenerationRun {
+  id     Int    @id @default(autoincrement())
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
+  @@map("generation_run")
+}

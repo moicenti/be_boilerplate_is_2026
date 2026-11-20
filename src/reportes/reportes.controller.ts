@@ -1,22 +1,41 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-// Ajusta estas rutas si tus guards están en otro lugar
-import { Roles } from '@Auth/decorators';
-import { RolesGuard } from '@Auth/guards';
-import { ResumenService } from './resumen.service.js';
+
+// ✅ Usa el alias exacto de tu tsconfig.json para el enum Role
+import { Role } from '@prisma/client';
+
+// ✅ Usa la ruta relativa directa al decorador para evitar fallos de alias
+import { Roles } from '../auth/decorators/roles.decorator.js'; // Ajusta el nombre del archivo si es diferente
+
 import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
+import { ResumenService } from './resumen.service.js';
+import type { ResumenResponse } from './resumen.service.js';
+import { SeccionesRepository } from './repositories/secciones.repository.js';
 
 @ApiTags('reportes')
 @ApiBearerAuth()
 @Controller('reportes')
-@UseGuards(RolesGuard)
 export class ReportesController {
-  constructor(private readonly resumenService: ResumenService) {}
+  constructor(
+    private readonly resumen: ResumenService,
+    private readonly secciones: SeccionesRepository,
+  ) {}
 
   @Get('resumen')
-  @Roles('ADMINISTRADOR')
-  @ApiOperation({ summary: 'H26: Panel general de indicadores' })
-  obtenerResumen(@Query() filtros: FiltrosReportesDto) {
-    return this.resumenService.obtenerResumen(filtros);
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'H26: los 4 indicadores del panel en una sola consulta',
+  })
+  obtenerResumen(
+    @Query() filtros: FiltrosReportesDto,
+  ): Promise<ResumenResponse> {
+    return this.resumen.obtenerResumen(filtros);
+  }
+
+  @Get('secciones')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
+  listarSecciones() {
+    return this.secciones.listar();
   }
 }

@@ -1,26 +1,37 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Roles } from '@Auth/decorators';
-import { Role } from '@PrismaClient';
-import { ResumenQueryDto } from '@Reportes/dto';
-import { ResumenService } from '@Reportes/services';
+import { Roles } from '../auth/decorators/roles.decorator.js'; // Ajusta la ruta si es necesario
 
-/**
- * H26. Panel general de indicadores. Solo ADMINISTRADOR.
- * 401 y 403 (ROL_NO_PERMITIDO) los resuelven los guards globales.
- */
+import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
+import { ResumenService } from './resumen.service.js';
+import type { ResumenResponse } from './resumen.service.js';
+import { SeccionesRepository } from './repositories/secciones.repository.js';
+
 @ApiTags('reportes')
 @ApiBearerAuth()
-@Roles(Role.ADMINISTRADOR)
 @Controller('reportes')
 export class ReportesController {
-  constructor(private readonly resumen: ResumenService) {}
+  constructor(
+    private readonly resumen: ResumenService,
+    private readonly secciones: SeccionesRepository,
+  ) {}
 
   @Get('resumen')
+  // ✅ Usamos el string directo 'ADMINISTRADOR' en lugar de Role.ADMINISTRADOR
+  @Roles('ADMINISTRADOR')
   @ApiOperation({
-    summary: 'Los 4 indicadores del panel (morosidad, ocupación, incidencias abiertas y participación)',
+    summary: 'H26: los 4 indicadores del panel en una sola consulta',
   })
-  obtener(@Query() query: ResumenQueryDto) {
-    return this.resumen.obtener(query);
+  obtenerResumen(
+    @Query() filtros: FiltrosReportesDto,
+  ): Promise<ResumenResponse> {
+    return this.resumen.obtenerResumen(filtros);
+  }
+
+  @Get('secciones')
+  @Roles('ADMINISTRADOR')
+  @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
+  listarSecciones() {
+    return this.secciones.listar();
   }
 }

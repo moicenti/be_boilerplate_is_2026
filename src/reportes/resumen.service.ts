@@ -1,21 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '@Prisma/services';
 import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
+import {MorosidadIndicador, type MorosidadValor,} from './services/indicadores/morosidad.indicador.js';
+import {OcupacionIndicador, type OcupacionValor,} from './services/indicadores/ocupacion.indicador.js';
+import {IncidenciasIndicador, type IncidenciasValor,} from './services/indicadores/incidencias.indicador.js';
+import {ParticipacionIndicador, type ParticipacionValor,} from './services/indicadores/participacion.indicador.js';
+import { PrismaService } from '../prisma/services/index.js';
 
-type IndicadorValor<T> = T | { estado: 'no_disponible' };
+export type IndicadorValor<T> = T | { estado: 'no_disponible' };
 
-interface ResumenResponse {
-  morosidad: IndicadorValor<{ porcentaje: number; monto: number }>;
-  ocupacion: IndicadorValor<{ porcentaje: number }>;
-  incidencias: IndicadorValor<{ cantidad: number }>;
-  participacion: IndicadorValor<{ porcentaje: number }>;
+// ✅ LA PALABRA 'export' ES OBLIGATORIA AQUÍ
+export interface ResumenResponse {
+  morosidad: IndicadorValor<MorosidadValor>;
+  ocupacion: IndicadorValor<OcupacionValor>;
+  incidencias: IndicadorValor<IncidenciasValor>;
+  participacion: IndicadorValor<ParticipacionValor>;
 }
 
 @Injectable()
 export class ResumenService {
   private readonly logger = new Logger(ResumenService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma:  PrismaService) {}
 
   async obtenerResumen(filtros: FiltrosReportesDto): Promise<ResumenResponse> {
     const [morosidad, ocupacion, incidencias, participacion] =
