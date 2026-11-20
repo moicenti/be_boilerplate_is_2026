@@ -26,6 +26,7 @@ const unit: Unit = {
   type: UnitType.DEPARTAMENTO,
   active: true,
   createdAt: new Date(),
+  historyStartsAt: null,
 };
 
 const guard = { id: 'guard-id', email: 'ricardo.soto@example.com' } as User;
@@ -256,8 +257,9 @@ describe('PaquetesService para residentes', () => {
       20,
       20,
       undefined,
+      null,
     );
-    expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith(unit.id);
+    expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith(unit.id, null);
     expect(result).toMatchObject({
       page: 2,
       total: 25,

@@ -99,9 +99,10 @@ export class PackageRepository {
     skip: number,
     take: number,
     search?: string,
+    since?: Date | null,
   ): Promise<{ items: PackageWithRelations[]; total: number }> {
     const where: Prisma.PackageWhereInput = {
-      unitId,
+      ...this.unitScope(unitId, since),
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -133,19 +134,28 @@ export class PackageRepository {
     return { items, total };
   }
 
-  countForUnit(unitId: string, status?: PackageStatus): Promise<number> {
+  countForUnit(
+    unitId: string,
+    status?: PackageStatus,
+    since?: Date | null,
+  ): Promise<number> {
     return this.prisma.package.count({
-      where: { unitId, ...(status ? { status } : {}) },
+      where: { ...this.unitScope(unitId, since), ...(status ? { status } : {}) },
     });
   }
 
-  countPendingForUnit(unitId: string): Promise<number> {
+  countPendingForUnit(unitId: string, since?: Date | null): Promise<number> {
     return this.prisma.package.count({
       where: {
-        unitId,
+        ...this.unitScope(unitId, since),
         status: PackageStatus.PENDIENTE_RETIRO,
       },
     });
+  }
+
+  /** Paquetes de la unidad desde que empezó su historial actual (ver Unit.historyStartsAt). */
+  private unitScope(unitId: string, since?: Date | null): Prisma.PackageWhereInput {
+    return { unitId, ...(since ? { receivedAt: { gte: since } } : {}) };
   }
 
   async pendingSummary(): Promise<PendingSummary> {

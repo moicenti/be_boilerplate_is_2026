@@ -93,6 +93,9 @@ model Unit {
   // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
   active      Boolean  @default(true) @map("activa")
   createdAt   DateTime @default(now()) @map("created_at")
+  // Se fija cuando la unidad queda sin residentes activos: los que lleguen
+  // después no ven los paquetes recibidos antes de esa fecha.
+  historyStartsAt DateTime? @map("historial_desde") @db.Timestamptz(6)
 
   users             User[]
   packages          Package[]

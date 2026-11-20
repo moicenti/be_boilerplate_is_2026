@@ -1,10 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
 import { EmailAlreadyTakenError, UnitNotFoundError } from '@Users/errors';
-import { Prisma, type Role, type User } from '@PrismaClient';
+import {
+  EstadoPreAutorizacion,
+  Prisma,
+  ReservationStatus,
+  Role,
+  type User,
+} from '@PrismaClient';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 const FOREIGN_KEY_VIOLATION = 'P2003';
+
+export interface ListUsersFilters {
+  role?: Role;
+  isActive?: boolean;
+}
 
 export interface CreateUserData {
   email: string;
@@ -58,6 +69,58 @@ export class UserRepository {
 
   updatePasswordHash(id: string, passwordHash: string): Promise<User> {
     return this.prisma.user.update({ where: { id }, data: { passwordHash } });
+  }
+
+  /** Cuentas que gestiona el administrador: residentes y seguridad. */
+  findManageable({ role, isActive }: ListUsersFilters): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: {
+        role: role ?? { in: [Role.RESIDENTE, Role.SEGURIDAD] },
+        ...(isActive !== undefined && { isActive }),
+      },
+      include: { unit: true },
+      orderBy: { email: 'asc' },
+    });
+  }
+
+  /**
+   * Desactiva la cuenta y limpia lo que cuelga de ella, todo o nada.
+   * Devuelve null si ya estaba inactiva (o si otra request se adelantó).
+   */
+  async deactivate(id: string, now: Date): Promise<User | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.user.findUnique({ where: { id } });
+      const { count } = await tx.user.updateMany({
+        where: { id, isActive: true },
+        data: { isActive: false, unitId: null },
+      });
+      if (!current || count === 0) return null;
+
+      await tx.refreshToken.deleteMany({ where: { userId: id } });
+      // Libera los horarios que tenía apartados.
+      await tx.reservation.updateMany({
+        where: { residentId: id, status: ReservationStatus.CONFIRMADA, endsAt: { gt: now } },
+        data: { status: ReservationStatus.CANCELADA },
+      });
+      await tx.preAutorizacion.updateMany({
+        where: { residenteId: id, estado: EstadoPreAutorizacion.VIGENTE },
+        data: { estado: EstadoPreAutorizacion.CANCELADA },
+      });
+
+      if (current.unitId) {
+        const remaining = await tx.user.count({
+          where: { unitId: current.unitId, role: Role.RESIDENTE, isActive: true },
+        });
+        if (remaining === 0) {
+          await tx.unit.update({
+            where: { id: current.unitId },
+            data: { historyStartsAt: now },
+          });
+        }
+      }
+
+      return tx.user.findUniqueOrThrow({ where: { id }, include: { unit: true } });
+    });
   }
 
   setActive(id: string, isActive: boolean): Promise<User> {

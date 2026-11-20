@@ -137,6 +137,10 @@ export class PaquetesService {
     };
     if (!user.unitId) return empty;
 
+    // Lo recibido antes de que la unidad quedara vacía era de otros residentes.
+    const since =
+      (await this.unidadesService.findById(user.unitId))?.historyStartsAt ?? null;
+
     const [{ items, total }, pendingCount, all, delivered] = await Promise.all([
       this.packageRepository.findPageForUnit(
         user.unitId,
@@ -144,10 +148,11 @@ export class PaquetesService {
         (query.page - 1) * PAGE_SIZE,
         PAGE_SIZE,
         query.q,
+        since,
       ),
-      this.packageRepository.countPendingForUnit(user.unitId),
-      this.packageRepository.countForUnit(user.unitId),
-      this.packageRepository.countForUnit(user.unitId, PackageStatus.ENTREGADO),
+      this.packageRepository.countPendingForUnit(user.unitId, since),
+      this.packageRepository.countForUnit(user.unitId, undefined, since),
+      this.packageRepository.countForUnit(user.unitId, PackageStatus.ENTREGADO, since),
     ]);
 
     return {
@@ -204,7 +209,12 @@ export class PaquetesService {
   }
 
   private belongsToUnitOf(pkg: PackageWithRelations, user: User): boolean {
-    return Boolean(user.unitId) && pkg.unitId === user.unitId;
+    const since = pkg.unit.historyStartsAt;
+    return (
+      Boolean(user.unitId) &&
+      pkg.unitId === user.unitId &&
+      (!since || pkg.receivedAt >= since)
+    );
   }
 
   private async findOrFail(id: string): Promise<PackageWithRelations> {
