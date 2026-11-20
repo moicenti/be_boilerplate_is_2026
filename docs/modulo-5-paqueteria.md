@@ -1,6 +1,6 @@
 # Módulo 5: Paquetería
 
-Responsable: Cristian Rodríguez · Historias implementadas: **H13. Registrar la llegada y la entrega de paquetes** (IST-14) y **H15. Consultar mi historial de paquetes**.
+Responsable: Cristian Rodríguez · Historias implementadas: **H13. Registrar la llegada y la entrega de paquetes** (IST-14), **H14. Recibir aviso cuando llega un paquete** (sección 10) y **H15. Consultar mi historial de paquetes**.
 
 Este documento describe el modelo de datos, los endpoints, los flujos, el estado en el frontend y las decisiones de arquitectura del módulo, con su justificación.
 
@@ -415,5 +415,59 @@ También crea paquetes demo, cada uno solo si no existe (se identifica por su gu
 | Tema | Detalle |
 | --- | --- |
 | Búsqueda con tildes | La búsqueda no distingue mayúsculas pero sí tildes: "martinez" no encuentra "Martínez" |
-| Aviso al residente | El detalle ya existe; el aviso que enlaza a él es de H14 (BE-14.1) y usará `NotificacionesService` del Módulo 9 |
 | Destinatario | Se elige la unidad y se escribe el nombre; no hay búsqueda de residentes porque los usuarios no tienen nombre registrado |
+
+## 10. H14. Recibir aviso cuando llega un paquete
+
+| Task | Descripción | Estado |
+| --- | --- | --- |
+| BE-14.1 | Aviso al registrar un paquete con `NotificacionesService.emitir()` | Hecha |
+| BE-14.2 | Recordatorio único a las 72 horas, tarea programada cada hora | Hecha |
+| BE-14.3 | Pruebas de integración | Hecha |
+| FE-14.1 | Detalle del paquete (destino del aviso) | Hecha en H15 |
+| QA-14.1 | Pruebas de aceptación | Ver [QA-14.1](qa/QA-14.1.md) |
+
+### Aviso de llegada (BE-14.1)
+
+Después de registrar un paquete, `AvisosPaqueteService.notifyArrival` emite un aviso con el servicio del Módulo 9 (decisión 8 del análisis):
+
+| Campo | Valor |
+| --- | --- |
+| Destinatario | `{ tipo: 'UNIDAD', id: unitId }`: todos los residentes activos de la unidad |
+| Módulo de origen | `paqueteria` (respeta la preferencia de avisos de cada residente, H25) |
+| Tipo | `LLEGADA_PAQUETE` |
+| Mensaje | Empresa, fecha y hora de recepción, destinatario, lugar de retiro y código de retiro |
+| Enlace | `/paquetes/{id}`: el detalle con el código, solo visible para residentes de la unidad (404 para otras unidades) |
+
+El aviso se emite al guardar el registro, así que llega dentro del minuto que pide el criterio. Si el envío falla, **el registro del paquete se conserva** y el error queda en el log; el Módulo 9 tiene reintentos propios.
+
+### Recordatorio a las 72 horas (BE-14.2)
+
+`AvisosPaqueteService.handleReminders` corre **cada hora** (`@Cron(CronExpression.EVERY_HOUR)`, con el `ScheduleModule` ya registrado por el Módulo 9):
+
+```mermaid
+flowchart TD
+    A[Cada hora] --> B[Paquetes Pendientes de retiro, recibidos hace 72 h o más y sin reminder_sent_at]
+    B --> C{Por cada paquete}
+    C --> D[(UPDATE reminder_sent_at = ahora WHERE id AND reminder_sent_at IS NULL AND pendiente)]
+    D --> E{¿Se actualizó 1 fila?}
+    E -- No: otra ejecución ya lo tomó --> C
+    E -- Sí --> F[Aviso RECORDATORIO_PAQUETE a los residentes de la unidad]
+    F --> C
+```
+
+**Decisión: marcar antes de avisar.** La fecha del recordatorio se guarda con una actualización condicional *antes* de emitir el aviso. Si dos ejecuciones coinciden, solo una toma el paquete, y el recordatorio nunca se repite, que es lo que pide el criterio ("un único recordatorio"). Como corre cada hora, el recordatorio llega a más tardar una hora después de cumplirse las 72 horas. Un paquete entregado ya no es candidato.
+
+### "Mis paquetes" con el nuevo diseño
+
+`GET /paquetes/mis-paquetes` agrega:
+- **`counts`**: Todos, Pendientes y Entregados de la unidad, para las pestañas;
+- **`q`**: búsqueda por folio o transportista.
+
+La pantalla muestra el aviso de paquetes pendientes con el punto de retiro, la columna "Estado / Entrega" y "Ver detalle".
+
+### Pruebas
+
+| Tipo | Archivo | Qué cubre |
+| --- | --- | --- |
+| Integración | `test/avisos-paquete.e2e-spec.ts` | Aviso a todos los residentes de la unidad con empresa, lugar, código y enlace; ningún aviso a otra unidad y 404 al abrir su paquete; preferencia de paquetería desactivada (sin aviso, pero el paquete en su historial); recordatorio único a las 72 horas (no a las 71); sin recordatorio de entregados; conteos y búsqueda del historial |

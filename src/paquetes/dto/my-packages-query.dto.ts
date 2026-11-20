@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { PackageStatus } from '@PrismaClient';
 
 export class MyPackagesQueryDto {
@@ -11,6 +18,15 @@ export class MyPackagesQueryDto {
   @IsOptional()
   @IsEnum(PackageStatus, { message: 'El estado no es válido.' })
   estado?: PackageStatus;
+
+  @ApiPropertyOptional({ description: 'Busca por folio o transportista.' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined,
+  )
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  q?: string;
 
   @ApiPropertyOptional({ default: 1, minimum: 1 })
   @IsOptional()

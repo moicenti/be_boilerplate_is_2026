@@ -22,4 +22,10 @@ export class MyPackagePageResponseDto {
     description: 'Paquetes pendientes de retiro de la unidad.',
   })
   pendingCount!: number;
+
+  @ApiProperty({
+    example: { TODOS: 5, PENDIENTE_RETIRO: 2, ENTREGADO: 3 },
+    description: 'Paquetes de la unidad por estado, sin aplicar la búsqueda.',
+  })
+  counts!: { TODOS: number; PENDIENTE_RETIRO: number; ENTREGADO: number };
 }

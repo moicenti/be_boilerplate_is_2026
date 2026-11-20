@@ -98,10 +98,26 @@ export class PackageRepository {
     status: PackageStatus | undefined,
     skip: number,
     take: number,
+    search?: string,
   ): Promise<{ items: PackageWithRelations[]; total: number }> {
     const where: Prisma.PackageWhereInput = {
       unitId,
       ...(status ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                folio: { contains: search, mode: Prisma.QueryMode.insensitive },
+              },
+              {
+                carrier: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -115,6 +131,12 @@ export class PackageRepository {
       this.prisma.package.count({ where }),
     ]);
     return { items, total };
+  }
+
+  countForUnit(unitId: string, status?: PackageStatus): Promise<number> {
+    return this.prisma.package.count({
+      where: { unitId, ...(status ? { status } : {}) },
+    });
   }
 
   countPendingForUnit(unitId: string): Promise<number> {
@@ -146,6 +168,30 @@ export class PackageRepository {
       orderBy: { carrier: 'asc' },
     });
     return rows.map((row) => row.carrier);
+  }
+
+  findDueForReminder(receivedBefore: Date): Promise<PackageWithRelations[]> {
+    return this.prisma.package.findMany({
+      where: {
+        status: PackageStatus.PENDIENTE_RETIRO,
+        receivedAt: { lte: receivedBefore },
+        reminderSentAt: null,
+      },
+      include: packageInclude,
+      orderBy: { receivedAt: 'asc' },
+    });
+  }
+
+  async markReminderSentIfPending(id: string, sentAt: Date): Promise<boolean> {
+    const { count } = await this.prisma.package.updateMany({
+      where: {
+        id,
+        status: PackageStatus.PENDIENTE_RETIRO,
+        reminderSentAt: null,
+      },
+      data: { reminderSentAt: sentAt },
+    });
+    return count === 1;
   }
 
   async markDeliveredIfPending(

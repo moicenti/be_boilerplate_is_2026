@@ -23,7 +23,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { PaquetesService } from '@Paquetes/services';
+import { AvisosPaqueteService, PaquetesService } from '@Paquetes/services';
 import {
   CreatePackageDto,
   DeliverPackageDto,
@@ -39,7 +39,10 @@ import { Role, type User } from '@PrismaClient';
 @ApiBearerAuth()
 @Controller('paquetes')
 export class PaquetesController {
-  constructor(private readonly paquetesService: PaquetesService) {}
+  constructor(
+    private readonly paquetesService: PaquetesService,
+    private readonly avisosPaqueteService: AvisosPaqueteService,
+  ) {}
 
   @Get()
   @Roles(Role.SEGURIDAD)
@@ -109,6 +112,7 @@ export class PaquetesController {
     @CurrentUser() user: User,
   ): Promise<PackageResponseDto> {
     const pkg = await this.paquetesService.register(dto, user);
+    await this.avisosPaqueteService.notifyArrival(pkg, user);
     return PackageResponseDto.fromEntity(pkg);
   }
 
