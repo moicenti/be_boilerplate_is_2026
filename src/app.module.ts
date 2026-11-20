@@ -11,15 +11,11 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { NotificacionesModule } from '@Notificaciones';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { IncidenciasModule } from '@Incidencias';
+import { IncidenciasModule } from './incidencias/incidencias.module.js';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
-import { AsambleasModule } from '@Asambleas';
 import { CommonAreasModule } from '@CommonAreas';
-import { ReservasModule } from '@Reservas';
-import { CuotasModule } from '@Cuotas';
 import { AnunciosModule } from './anuncio/index.js';
-import { VisitasModule } from '@Visitas';
 
 @Module({
   imports: [
@@ -36,11 +32,7 @@ import { VisitasModule } from '@Visitas';
     IncidenciasModule,
     UnidadesModule,
     PaquetesModule,
-    AsambleasModule,
     CommonAreasModule,
-    VisitasModule,
-    ReservasModule,
-    CuotasModule,
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
