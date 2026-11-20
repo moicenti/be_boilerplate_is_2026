@@ -39,6 +39,7 @@ export interface MyPackagePage {
   total: number;
   totalPages: number;
   pendingCount: number;
+  counts: { TODOS: number; PENDIENTE_RETIRO: number; ENTREGADO: number };
 }
 
 @Injectable()
@@ -132,17 +133,21 @@ export class PaquetesService {
       total: 0,
       totalPages: 1,
       pendingCount: 0,
+      counts: { TODOS: 0, PENDIENTE_RETIRO: 0, ENTREGADO: 0 },
     };
     if (!user.unitId) return empty;
 
-    const [{ items, total }, pendingCount] = await Promise.all([
+    const [{ items, total }, pendingCount, all, delivered] = await Promise.all([
       this.packageRepository.findPageForUnit(
         user.unitId,
         query.estado,
         (query.page - 1) * PAGE_SIZE,
         PAGE_SIZE,
+        query.q,
       ),
       this.packageRepository.countPendingForUnit(user.unitId),
+      this.packageRepository.countForUnit(user.unitId),
+      this.packageRepository.countForUnit(user.unitId, PackageStatus.ENTREGADO),
     ]);
 
     return {
@@ -151,6 +156,11 @@ export class PaquetesService {
       total,
       totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
       pendingCount,
+      counts: {
+        TODOS: all,
+        PENDIENTE_RETIRO: pendingCount,
+        ENTREGADO: delivered,
+      },
     };
   }
 

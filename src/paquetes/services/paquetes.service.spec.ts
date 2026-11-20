@@ -81,6 +81,7 @@ function setup(
       .fn()
       .mockResolvedValue({ items: [pending, delivered], total: 25 }),
     countPendingForUnit: vi.fn().mockResolvedValue(1),
+    countForUnit: vi.fn().mockResolvedValue(25),
   };
   const unidadesService = {
     findById: vi.fn().mockResolvedValue(foundUnit),
@@ -254,6 +255,7 @@ describe('PaquetesService para residentes', () => {
       PackageStatus.ENTREGADO,
       20,
       20,
+      undefined,
     );
     expect(packageRepository.countPendingForUnit).toHaveBeenCalledWith(unit.id);
     expect(result).toMatchObject({
