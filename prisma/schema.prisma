@@ -75,7 +75,6 @@ enum Role {
   RESIDENTE
   ADMINISTRADOR
   SEGURIDAD
-  MANTENIMIENTO
 }
 
 enum Priority {

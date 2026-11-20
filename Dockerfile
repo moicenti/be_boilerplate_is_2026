@@ -64,4 +64,5 @@ USER node
 
 EXPOSE 3000
 
-CMD ["node", "dist/main.js"]
+# Render usa este CMD: aplica migraciones antes de levantar la API.
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

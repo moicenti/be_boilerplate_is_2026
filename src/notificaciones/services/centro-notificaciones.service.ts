@@ -43,11 +43,16 @@ export class CentroNotificacionesService {
       sesion.id,
       (page - 1) * size,
       size,
-      query.modulo, // <-- NUEVO: Pasar filtro de módulo
-      query.leidas, // <-- NUEVO: Pasar filtro de estado de lectura
+      { modulo: query.modulo, leidas: query.leidas },
     );
 
     return { total, page, size, items };
+  }
+
+  async marcarTodasLeidas(
+    sesion: SesionResidente,
+  ): Promise<{ actualizadas: number }> {
+    return { actualizadas: await this.repo.marcarTodasLeidas(sesion.id) };
   }
 
   async contarNoLeidas(sesion: SesionResidente): Promise<ConteoNoLeidas> {

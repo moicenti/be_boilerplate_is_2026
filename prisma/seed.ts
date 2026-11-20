@@ -121,11 +121,6 @@ const STAFF = [
   { email: 'laura.admin@example.com', role: Role.ADMINISTRADOR },
 ];
 
-const STAFF_EXTRA = [
-  { email: 'mantenimiento@example.com', role: Role.MANTENIMIENTO },
-  { email: 'mantenimiento2@example.com', role: Role.MANTENIMIENTO },
-];
-
 // ─── Datos para H7–H12 ───────────────────────────────────────────────────────
 
 type DemoIncidencia = {
@@ -177,7 +172,7 @@ const DEMO_INCIDENCIAS: DemoIncidencia[] = [
     location: 'Estacionamiento · Sótano 1 · Cajón 18',
     status: 'En atención',
     priority: 'ALTA',
-    assigneeEmail: 'mantenimiento@example.com',
+    assigneeEmail: 'laura.admin@example.com',
     dueDateOffsetHoras: 48,
     priorityJustification: null,
     resolutionComment: null,
@@ -188,7 +183,7 @@ const DEMO_INCIDENCIAS: DemoIncidencia[] = [
         action: 'ASIGNADO',
         actorEmail: 'admin@example.com',
         offsetHoras: -46,
-        metadata: { priority: 'ALTA', assigneeEmail: 'mantenimiento@example.com', dueDate: 'próximas 48h' },
+        metadata: { priority: 'ALTA', assigneeEmail: 'laura.admin@example.com', dueDate: 'próximas 48h' },
       },
     ],
   },
@@ -201,11 +196,11 @@ const DEMO_INCIDENCIAS: DemoIncidencia[] = [
     location: 'Torre A · Acceso peatonal',
     status: 'Resuelto',
     priority: 'CRITICA',
-    assigneeEmail: 'mantenimiento2@example.com',
+    assigneeEmail: 'admin@example.com',
     dueDateOffsetHoras: 12,
     priorityJustification: 'Riesgo de seguridad para los residentes.',
     resolutionComment: 'Se ajustó la bisagra y se lubricó el mecanismo.',
-    resolvedByEmail: 'mantenimiento2@example.com',
+    resolvedByEmail: 'admin@example.com',
     events: [
       { action: 'CREADO', actorEmail: 'otro@example.com', offsetHoras: -72, metadata: { status: 'Abierto' } },
       {
@@ -215,12 +210,12 @@ const DEMO_INCIDENCIAS: DemoIncidencia[] = [
         metadata: {
           priority: 'CRITICA',
           priorityJustification: 'Riesgo de seguridad para los residentes.',
-          assigneeEmail: 'mantenimiento2@example.com',
+          assigneeEmail: 'admin@example.com',
         },
       },
       {
         action: 'RESUELTO',
-        actorEmail: 'mantenimiento2@example.com',
+        actorEmail: 'admin@example.com',
         offsetHoras: -24,
         metadata: { resolutionComment: 'Se ajustó la bisagra y se lubricó el mecanismo.' },
       },
@@ -235,15 +230,15 @@ const DEMO_INCIDENCIAS: DemoIncidencia[] = [
     location: 'Torre B · Elevador principal',
     status: 'Cerrado',
     priority: 'MEDIA',
-    assigneeEmail: 'mantenimiento@example.com',
+    assigneeEmail: 'laura.admin@example.com',
     dueDateOffsetHoras: -12,
     priorityJustification: null,
     resolutionComment: 'Se revisó el sistema de tracción y se ajustó la guía.',
-    resolvedByEmail: 'mantenimiento@example.com',
+    resolvedByEmail: 'laura.admin@example.com',
     events: [
       { action: 'CREADO', actorEmail: 'sofia.herrera@example.com', offsetHoras: -120, metadata: { status: 'Abierto' } },
-      { action: 'ASIGNADO', actorEmail: 'admin@example.com', offsetHoras: -110, metadata: { priority: 'MEDIA', assigneeEmail: 'mantenimiento@example.com' } },
-      { action: 'RESUELTO', actorEmail: 'mantenimiento@example.com', offsetHoras: -48, metadata: { resolutionComment: 'Se revisó el sistema de tracción y se ajustó la guía.' } },
+      { action: 'ASIGNADO', actorEmail: 'admin@example.com', offsetHoras: -110, metadata: { priority: 'MEDIA', assigneeEmail: 'laura.admin@example.com' } },
+      { action: 'RESUELTO', actorEmail: 'laura.admin@example.com', offsetHoras: -48, metadata: { resolutionComment: 'Se revisó el sistema de tracción y se ajustó la guía.' } },
       { action: 'CONFIRMADO', actorEmail: 'sofia.herrera@example.com', offsetHoras: -24, metadata: { confirmedAt: 'hace 24h' } },
     ],
   },
@@ -392,7 +387,7 @@ async function seedIncidenciasYVisitas() {
 
   const userIdByEmail = new Map<string, string>();
   for (const r of residentes) userIdByEmail.set(r.email, r.id);
-  for (const email of ['admin@example.com', 'mantenimiento@example.com', 'mantenimiento2@example.com']) {
+  for (const email of ['admin@example.com', 'laura.admin@example.com']) {
     const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (u) userIdByEmail.set(email, u.id);
   }
@@ -586,7 +581,7 @@ async function main() {
   console.log(`Administrador demo listo: ${admin.email}`);
 
   // 6. Staff
-  for (const staff of [...STAFF, ...STAFF_EXTRA]) {
+  for (const staff of STAFF) {
     const created = await prisma.user.upsert({
       where: { email: staff.email },
       update: { passwordHash, role: staff.role, unitId: null },
