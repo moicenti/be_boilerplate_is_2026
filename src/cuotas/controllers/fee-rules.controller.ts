@@ -2,9 +2,7 @@ import {
   Body,
   Controller,
   Get,
-  HttpStatus,
   Param,
-  ParseIntPipe,
   Patch,
   Post,
   Put,
@@ -28,7 +26,6 @@ import {
 import { Role, type User } from '@PrismaClient';
 import type { EnvConfig } from '@Config';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { ApiException } from '@Common/errors';
 import { ApiExceptionFilter } from '@Common/filters';
 import { FeeRulesService, type FeeRuleView } from '../services/index.js';
 import {
@@ -40,15 +37,7 @@ import {
   ListFeeRulesQueryDto,
   SaveFeeRuleDto,
 } from '../dto/index.js';
-
-const parseId = new ParseIntPipe({
-  exceptionFactory: () =>
-    new ApiException(
-      HttpStatus.BAD_REQUEST,
-      'SOLICITUD_INVALIDA',
-      'El id de la regla debe ser un número entero.',
-    ),
-});
+import { parseRuleId } from './rule-id.pipe.js';
 
 @ApiTags('reglas-cuota')
 @ApiBearerAuth()
@@ -94,7 +83,9 @@ export class FeeRulesController {
   @ApiOperation({ summary: 'Consulta una regla de cuota' })
   @ApiOkResponse({ type: FeeRuleResponseDto })
   @ApiNotFoundResponse({ description: 'REGLA_INEXISTENTE' })
-  async findOne(@Param('id', parseId) id: number): Promise<FeeRuleResponseDto> {
+  async findOne(
+    @Param('id', parseRuleId) id: number,
+  ): Promise<FeeRuleResponseDto> {
     return this.toResponse(await this.rulesService.findOne(id));
   }
 
@@ -111,7 +102,7 @@ export class FeeRulesController {
     description: 'REGLA_INCOMPLETA (regla ACTIVA)',
   })
   async update(
-    @Param('id', parseId) id: number,
+    @Param('id', parseRuleId) id: number,
     @Body() dto: SaveFeeRuleDto,
     @CurrentUser() user: User,
   ): Promise<FeeRuleResponseDto> {
@@ -125,7 +116,7 @@ export class FeeRulesController {
   @ApiConflictResponse({ description: 'TRANSICION_INVALIDA / REGLA_DUPLICADA' })
   @ApiUnprocessableEntityResponse({ description: 'REGLA_INCOMPLETA' })
   async changeStatus(
-    @Param('id', parseId) id: number,
+    @Param('id', parseRuleId) id: number,
     @Body() dto: ChangeFeeRuleStatusDto,
     @CurrentUser() user: User,
   ): Promise<FeeRuleStatusResponseDto> {
@@ -141,7 +132,7 @@ export class FeeRulesController {
   @ApiOkResponse({ type: [FeeRuleChangeResponseDto] })
   @ApiNotFoundResponse({ description: 'REGLA_INEXISTENTE' })
   async findChanges(
-    @Param('id', parseId) id: number,
+    @Param('id', parseRuleId) id: number,
   ): Promise<FeeRuleChangeResponseDto[]> {
     const changes = await this.rulesService.findChanges(id);
     return changes.map((change) =>

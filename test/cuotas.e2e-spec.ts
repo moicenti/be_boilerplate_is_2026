@@ -93,6 +93,8 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
 
   beforeAll(async () => {
     ({ app, prisma } = await createTestApp());
+    // Sin un puerto fijo, supertest levanta un servidor por petición y las paralelas fallan.
+    await app.listen(0);
     scheduler = app.get(FeeGenerationScheduler);
   });
 

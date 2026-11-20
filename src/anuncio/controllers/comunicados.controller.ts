@@ -79,7 +79,7 @@ export class ComunicadosController {
         callback(null, true);
       },
       storage: diskStorage({
-        destination: './public/uploads/anuncios',
+        destination: './uploads/anuncios',
         filename: (
           _req: Request,
           file: Express.Multer.File,
