@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role } from '../src/generated/prisma/client.js';
+import { PrismaClient, Role, Priority, Prisma } from '../src/generated/prisma/client.js';
 
 const DEMO_EMAIL = 'demo@example.com';
-// La contraseña de las cuentas demo (incluido el administrador) sale del
-// entorno y nunca del repo: el código es público.
 const DEMO_PASSWORD = readDemoPassword();
 
 function readDemoPassword(): string {
@@ -35,7 +33,7 @@ const UNITS = [
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const UNITS_REGISTERED_AT = new Date("2026-01-01T00:00:00-06:00");
+const UNITS_REGISTERED_AT = new Date('2026-01-01T00:00:00-06:00');
 
 type DemoPackage = {
   unit: string;
@@ -123,13 +121,432 @@ const STAFF = [
   { email: 'laura.admin@example.com', role: Role.ADMINISTRADOR },
 ];
 
+const STAFF_EXTRA = [
+  { email: 'mantenimiento@example.com', role: Role.MANTENIMIENTO },
+  { email: 'mantenimiento2@example.com', role: Role.MANTENIMIENTO },
+];
+
+// ─── Datos para H7–H12 ───────────────────────────────────────────────────────
+
+type DemoIncidencia = {
+  residenteEmail: string;
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  status: string;
+  priority: Priority | null;
+  assigneeEmail: string | null;
+  dueDateOffsetHoras: number | null;
+  priorityJustification: string | null;
+  resolutionComment: string | null;
+  resolvedByEmail: string | null;
+  events: Array<{
+    action: string;
+    actorEmail: string;
+    offsetHoras: number;
+    metadata: Prisma.InputJsonValue;
+  }>;
+};
+
+const DEMO_INCIDENCIAS: DemoIncidencia[] = [
+  {
+    residenteEmail: 'demo@example.com',
+    title: 'Luminaria apagada en pasillo',
+    description:
+      'La luminaria frente al elevador del tercer piso no enciende desde anoche. El pasillo queda oscuro al salir del departamento. Las demás luces del piso funcionan con normalidad.',
+    category: 'Mantenimiento',
+    location: 'Torre A · Piso 3 · Pasillo frente al elevador',
+    status: 'Abierto',
+    priority: null,
+    assigneeEmail: null,
+    dueDateOffsetHoras: null,
+    priorityJustification: null,
+    resolutionComment: null,
+    resolvedByEmail: null,
+    events: [
+      { action: 'CREADO', actorEmail: 'demo@example.com', offsetHoras: -26, metadata: { status: 'Abierto' } },
+    ],
+  },
+  {
+    residenteEmail: 'demo@example.com',
+    title: 'Fuga de agua en estacionamiento',
+    description:
+      'Desde esta mañana hay un goteo constante en la tubería del techo, sobre el cajón 18 del sótano 1. Se está formando un charco junto al paso peatonal.',
+    category: 'Plomería',
+    location: 'Estacionamiento · Sótano 1 · Cajón 18',
+    status: 'En atención',
+    priority: 'ALTA',
+    assigneeEmail: 'mantenimiento@example.com',
+    dueDateOffsetHoras: 48,
+    priorityJustification: null,
+    resolutionComment: null,
+    resolvedByEmail: null,
+    events: [
+      { action: 'CREADO', actorEmail: 'demo@example.com', offsetHoras: -50, metadata: { status: 'Abierto' } },
+      {
+        action: 'ASIGNADO',
+        actorEmail: 'admin@example.com',
+        offsetHoras: -46,
+        metadata: { priority: 'ALTA', assigneeEmail: 'mantenimiento@example.com', dueDate: 'próximas 48h' },
+      },
+    ],
+  },
+  {
+    residenteEmail: 'otro@example.com',
+    title: 'Puerta de acceso no cierra',
+    description:
+      'La puerta peatonal de la torre A no cierra correctamente, queda entreabierta y permite el paso sin control.',
+    category: 'Seguridad',
+    location: 'Torre A · Acceso peatonal',
+    status: 'Resuelto',
+    priority: 'CRITICA',
+    assigneeEmail: 'mantenimiento2@example.com',
+    dueDateOffsetHoras: 12,
+    priorityJustification: 'Riesgo de seguridad para los residentes.',
+    resolutionComment: 'Se ajustó la bisagra y se lubricó el mecanismo.',
+    resolvedByEmail: 'mantenimiento2@example.com',
+    events: [
+      { action: 'CREADO', actorEmail: 'otro@example.com', offsetHoras: -72, metadata: { status: 'Abierto' } },
+      {
+        action: 'ASIGNADO',
+        actorEmail: 'admin@example.com',
+        offsetHoras: -70,
+        metadata: {
+          priority: 'CRITICA',
+          priorityJustification: 'Riesgo de seguridad para los residentes.',
+          assigneeEmail: 'mantenimiento2@example.com',
+        },
+      },
+      {
+        action: 'RESUELTO',
+        actorEmail: 'mantenimiento2@example.com',
+        offsetHoras: -24,
+        metadata: { resolutionComment: 'Se ajustó la bisagra y se lubricó el mecanismo.' },
+      },
+    ],
+  },
+  {
+    residenteEmail: 'sofia.herrera@example.com',
+    title: 'Ruido en el elevador',
+    description:
+      'El elevador principal de la torre B hace un ruido metálico al subir del piso 2 al 3. Se escucha desde el pasillo.',
+    category: 'Mantenimiento',
+    location: 'Torre B · Elevador principal',
+    status: 'Cerrado',
+    priority: 'MEDIA',
+    assigneeEmail: 'mantenimiento@example.com',
+    dueDateOffsetHoras: -12,
+    priorityJustification: null,
+    resolutionComment: 'Se revisó el sistema de tracción y se ajustó la guía.',
+    resolvedByEmail: 'mantenimiento@example.com',
+    events: [
+      { action: 'CREADO', actorEmail: 'sofia.herrera@example.com', offsetHoras: -120, metadata: { status: 'Abierto' } },
+      { action: 'ASIGNADO', actorEmail: 'admin@example.com', offsetHoras: -110, metadata: { priority: 'MEDIA', assigneeEmail: 'mantenimiento@example.com' } },
+      { action: 'RESUELTO', actorEmail: 'mantenimiento@example.com', offsetHoras: -48, metadata: { resolutionComment: 'Se revisó el sistema de tracción y se ajustó la guía.' } },
+      { action: 'CONFIRMADO', actorEmail: 'sofia.herrera@example.com', offsetHoras: -24, metadata: { confirmedAt: 'hace 24h' } },
+    ],
+  },
+];
+
+type DemoPreAutorizacion = {
+  residenteEmail: string;
+  nombreVisitante: string;
+  documento: string;
+  acompanantes: number;
+  motivo: string | null;
+  inicioOffsetHoras: number;
+  finOffsetHoras: number;
+  estado: 'VIGENTE' | 'USADA' | 'CANCELADA' | 'EXPIRADA';
+};
+
+const DEMO_PREAUTORIZACIONES: DemoPreAutorizacion[] = [
+  {
+    residenteEmail: 'demo@example.com',
+    nombreVisitante: 'Juan Pérez',
+    documento: '12345678',
+    acompanantes: 2,
+    motivo: 'Entrega de paquetería',
+    inicioOffsetHoras: 2,
+    finOffsetHoras: 8,
+    estado: 'VIGENTE',
+  },
+  {
+    residenteEmail: 'demo@example.com',
+    nombreVisitante: 'María García',
+    documento: '87654321',
+    acompanantes: 0,
+    motivo: 'Visita familiar',
+    inicioOffsetHoras: 4,
+    finOffsetHoras: 10,
+    estado: 'VIGENTE',
+  },
+  {
+    residenteEmail: 'otro@example.com',
+    nombreVisitante: 'Pedro Ramírez',
+    documento: '11223344',
+    acompanantes: 1,
+    motivo: 'Reunión de trabajo',
+    inicioOffsetHoras: -2,
+    finOffsetHoras: 6,
+    estado: 'USADA',
+  },
+];
+
+type DemoVisitaActiva = {
+  nombreVisitante: string;
+  documento: string;
+  acompanantes: number;
+  motivo: string | null;
+  estado: 'DENTRO' | 'DENTRO_SIN_AUTORIZACION';
+  unidadCode: string;
+  preautorizacionDocumento: string | null;
+  registradoPorEmail: string;
+  entradaOffsetHoras: number;
+  salidaOffsetHoras: number | null;
+  salidaRegistradaPorEmail: string | null;
+};
+
+const DEMO_VISITAS_ACTIVAS: DemoVisitaActiva[] = [
+  {
+    nombreVisitante: 'Pedro Ramírez',
+    documento: '11223344',
+    acompanantes: 1,
+    motivo: null,
+    estado: 'DENTRO',
+    unidadCode: 'A-20',
+    preautorizacionDocumento: '11223344',
+    registradoPorEmail: 'ricardo.soto@example.com',
+    entradaOffsetHoras: -1,
+    salidaOffsetHoras: null,
+    salidaRegistradaPorEmail: null,
+  },
+  {
+    nombreVisitante: 'Carlos Mendoza',
+    documento: '99887766',
+    acompanantes: 0,
+    motivo: 'Visita sin autorización previa, entregó documento.',
+    estado: 'DENTRO_SIN_AUTORIZACION',
+    unidadCode: 'B-205',
+    preautorizacionDocumento: null,
+    registradoPorEmail: 'ricardo.soto@example.com',
+    entradaOffsetHoras: -3,
+    salidaOffsetHoras: null,
+    salidaRegistradaPorEmail: null,
+  },
+  {
+    nombreVisitante: 'Ana Torres',
+    documento: '55667788',
+    acompanantes: 2,
+    motivo: null,
+    estado: 'DENTRO',
+    unidadCode: 'A-19',
+    preautorizacionDocumento: null,
+    registradoPorEmail: 'ricardo.soto@example.com',
+    entradaOffsetHoras: -5,
+    salidaOffsetHoras: null,
+    salidaRegistradaPorEmail: null,
+  },
+  {
+    nombreVisitante: 'Luis Fernández',
+    documento: '33445566',
+    acompanantes: 0,
+    motivo: null,
+    estado: 'DENTRO',
+    unidadCode: 'B-103',
+    preautorizacionDocumento: null,
+    registradoPorEmail: 'ricardo.soto@example.com',
+    entradaOffsetHoras: -8,
+    salidaOffsetHoras: -2,
+    salidaRegistradaPorEmail: 'ricardo.soto@example.com',
+  },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function generarCodigo(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+function dateOffset(hours: number): Date {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
+// ─── Seed de incidencias y visitas ───────────────────────────────────────────
+
+async function seedIncidenciasYVisitas() {
+  console.log('\n📋 Incidencias (H7–H9)');
+  const residentes = await prisma.user.findMany({
+    where: {
+      email: {
+        in: ['demo@example.com', 'otro@example.com', 'sofia.herrera@example.com'],
+      },
+    },
+    select: { id: true, email: true, unitId: true },
+  });
+
+  const userIdByEmail = new Map<string, string>();
+  for (const r of residentes) userIdByEmail.set(r.email, r.id);
+  for (const email of ['admin@example.com', 'mantenimiento@example.com', 'mantenimiento2@example.com']) {
+    const u = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (u) userIdByEmail.set(email, u.id);
+  }
+
+  let incidenteIndex = 1;
+  for (const inc of DEMO_INCIDENCIAS) {
+    const residente = residentes.find((r) => r.email === inc.residenteEmail);
+    if (!residente || !residente.unitId) continue;
+
+    const existe = await prisma.report.findFirst({ where: { title: inc.title } });
+    if (existe) continue;
+
+    const unidad = await prisma.unit.findUniqueOrThrow({
+      where: { id: residente.unitId },
+      select: { code: true },
+    });
+    const assignee = inc.assigneeEmail
+      ? await prisma.user.findUnique({ where: { email: inc.assigneeEmail }, select: { id: true } })
+      : null;
+    const resolvedBy = inc.resolvedByEmail
+      ? await prisma.user.findUnique({ where: { email: inc.resolvedByEmail }, select: { id: true } })
+      : null;
+
+    const year = new Date().getFullYear();
+    const folio = `INC-${year}-${String(incidenteIndex).padStart(4, '0')}`;
+    const createdAt = dateOffset(inc.events[0]?.offsetHoras ?? -24);
+
+    // 1. Crear el reporte SIN eventos
+    const report = await prisma.report.create({
+      data: {
+        folio,
+        title: inc.title,
+        description: inc.description,
+        category: inc.category,
+        location: inc.location,
+        status: inc.status,
+        unit: unidad.code,
+        userId: residente.id,
+        priority: inc.priority,
+        priorityJustification: inc.priorityJustification,
+        assigneeId: assignee?.id ?? null,
+        dueDate: inc.dueDateOffsetHoras !== null ? dateOffset(inc.dueDateOffsetHoras) : null,
+        resolvedAt: resolvedBy ? dateOffset(-24) : null,
+        resolvedById: resolvedBy?.id ?? null,
+        resolutionComment: inc.resolutionComment,
+        createdAt,
+        updatedAt: dateOffset(-1),
+      },
+    });
+
+    // 2. Crear los eventos con `createMany` (evita el tipo Unchecked)
+    await prisma.reportEvent.createMany({
+      data: inc.events.map((evt) => ({
+        action: evt.action,
+        userId: userIdByEmail.get(evt.actorEmail) ?? residente.id,
+        reportId: report.id,
+        metadata: evt.metadata,
+        createdAt: dateOffset(evt.offsetHoras),
+      })),
+    });
+
+    console.log(`   ${folio} · ${inc.title} (${inc.status})`);
+    incidenteIndex++;
+  }
+
+  console.log('\n🎫 Pre-autorizaciones (H10)');
+  const unitByCode = new Map(
+    (await prisma.unit.findMany({ select: { id: true, code: true } })).map((u) => [u.code, u.id]),
+  );
+  for (const pre of DEMO_PREAUTORIZACIONES) {
+    const residente = residentes.find((r) => r.email === pre.residenteEmail);
+    if (!residente || !residente.unitId) continue;
+
+    const existe = await prisma.preAutorizacion.findFirst({
+      where: { nombreVisitante: pre.nombreVisitante, documento: pre.documento },
+    });
+    if (existe) continue;
+
+    const codigo = generarCodigo();
+    await prisma.preAutorizacion.create({
+      data: {
+        codigo,
+        nombreVisitante: pre.nombreVisitante,
+        documento: pre.documento,
+        acompanantes: pre.acompanantes,
+        motivo: pre.motivo,
+        inicio: dateOffset(pre.inicioOffsetHoras),
+        fin: dateOffset(pre.finOffsetHoras),
+        estado: pre.estado,
+        residenteId: residente.id,
+        unidadId: residente.unitId,
+      },
+    });
+    console.log(`   ${codigo} · ${pre.nombreVisitante} (${pre.estado})`);
+  }
+
+  console.log('\n👥 Visitas activas (H11–H12)');
+  const seguridad = await prisma.user.findUniqueOrThrow({
+    where: { email: 'ricardo.soto@example.com' },
+  });
+  for (const v of DEMO_VISITAS_ACTIVAS) {
+    const existe = await prisma.visitaActiva.findFirst({
+      where: { documento: v.documento, estado: { in: ['DENTRO', 'DENTRO_SIN_AUTORIZACION'] } },
+    });
+    if (existe) continue;
+
+    const unidadId = unitByCode.get(v.unidadCode);
+    if (!unidadId) continue;
+
+    let preautorizacionId: string | null = null;
+    if (v.preautorizacionDocumento) {
+      const pre = await prisma.preAutorizacion.findFirst({
+        where: { documento: v.preautorizacionDocumento },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      preautorizacionId = pre?.id ?? null;
+    }
+
+    const salidaPor = v.salidaRegistradaPorEmail
+      ? await prisma.user.findUnique({
+          where: { email: v.salidaRegistradaPorEmail },
+          select: { id: true },
+        })
+      : null;
+
+    await prisma.visitaActiva.create({
+      data: {
+        nombreVisitante: v.nombreVisitante,
+        documento: v.documento,
+        acompanantes: v.acompanantes,
+        motivo: v.motivo,
+        estado: v.estado,
+        entrada: dateOffset(v.entradaOffsetHoras),
+        salida: v.salidaOffsetHoras !== null ? dateOffset(v.salidaOffsetHoras) : null,
+        unidadId,
+        preautorizacionId,
+        registradoPorId: seguridad.id,
+        salidaRegistradaPorId: salidaPor?.id ?? null,
+      },
+    });
+    console.log(`   ${v.nombreVisitante} (${v.estado}) · ${v.unidadCode}`);
+  }
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
-  // 1. Crear unidades primero
+  // 1. Unidades
   for (const unit of UNITS) {
     await prisma.unit.upsert({
       where: { code: unit.code },
@@ -139,61 +556,41 @@ async function main() {
   }
   console.log(`Unidades listas: ${UNITS.length}`);
 
-  // 2. Lookup de unitIds por código
+  // 2. Lookup de unitIds
   const unitByCode = new Map(
-    (await prisma.unit.findMany({ select: { id: true, code: true } })).map(
-      (u) => [u.code, u.id],
-    ),
+    (await prisma.unit.findMany({ select: { id: true, code: true } })).map((u) => [u.code, u.id]),
   );
 
-  // 3. Usuario demo (A-19)
+  // 3. Usuario demo
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
     update: { passwordHash, unitId: unitByCode.get('A-19') ?? null },
-    create: {
-      email: DEMO_EMAIL,
-      passwordHash,
-      unitId: unitByCode.get('A-19') ?? null,
-    },
+    create: { email: DEMO_EMAIL, passwordHash, unitId: unitByCode.get('A-19') ?? null },
   });
   console.log(`Usuario demo listo: ${user.email}`);
 
-  // 4. Otro usuario (A-20)
+  // 4. Otro usuario
   const user2 = await prisma.user.upsert({
     where: { email: 'otro@example.com' },
     update: { passwordHash, unitId: unitByCode.get('A-20') ?? null },
-    create: {
-      email: 'otro@example.com',
-      passwordHash,
-      unitId: unitByCode.get('A-20') ?? null,
-    },
+    create: { email: 'otro@example.com', passwordHash, unitId: unitByCode.get('A-20') ?? null },
   });
   console.log(`Usuario demo listo: ${user2.email}`);
 
-  // 5. Admin (sin unidad)
+  // 5. Admin
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: { passwordHash, role: 'ADMINISTRADOR', unitId: null },
-    create: {
-      email: 'admin@example.com',
-      passwordHash,
-      role: 'ADMINISTRADOR',
-      unitId: null,
-    },
+    update: { passwordHash, role: Role.ADMINISTRADOR, unitId: null },
+    create: { email: 'admin@example.com', passwordHash, role: Role.ADMINISTRADOR, unitId: null },
   });
   console.log(`Administrador demo listo: ${admin.email}`);
 
-  // 6. Staff (sin unidad)
-  for (const staff of STAFF) {
+  // 6. Staff
+  for (const staff of [...STAFF, ...STAFF_EXTRA]) {
     const created = await prisma.user.upsert({
       where: { email: staff.email },
       update: { passwordHash, role: staff.role, unitId: null },
-      create: {
-        email: staff.email,
-        passwordHash,
-        role: staff.role,
-        unitId: null,
-      },
+      create: { email: staff.email, passwordHash, role: staff.role, unitId: null },
     });
     console.log(`Usuario ${staff.role} listo: ${created.email}`);
   }
@@ -243,7 +640,7 @@ async function main() {
     );
   }
 
-  // 8. Asambleas demo
+  // 8. Asambleas
   const admin2 = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@example.com' } });
   console.log('Asambleas demo:');
   for (const demo of DEMO_ASSEMBLIES) {
@@ -295,7 +692,7 @@ async function main() {
     console.log(`  ${folio} · ${demo.title}`);
   }
 
-  // 8b. Votos demo en "Renovación de luminarias" (cerrada) para ver resultados y auditoría
+  // 8b. Votos demo
   const luminarias = await prisma.votingTopic.findFirst({
     where: { assembly: { title: 'Renovación de luminarias' } },
     include: { options: { orderBy: { position: 'asc' } } },
@@ -325,12 +722,10 @@ async function main() {
     console.log('  Votos demo en "Renovación de luminarias": 2');
   }
 
-  // 9. Cuotas y pagos demo (H1): en A-19 una pagada, una con pago parcial y una pendiente
-  // (los datos de QA-1.1); en A-20, una pendiente de otra unidad.
+  // 9. Cuotas
   const demoUnitId = unitByCode.get('A-19');
   const otherUnitId = unitByCode.get('A-20');
   if (demoUnitId && otherUnitId && (await prisma.fee.count({ where: { unitId: demoUnitId } })) === 0) {
-    // Periodos relativos al mes actual, con vencimiento el día 10.
     const monthOffset = (offset: number) => {
       const now = new Date();
       const month = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 10));
@@ -369,14 +764,14 @@ async function main() {
     );
   }
 
-  // 10. Generación manual de cuotas (H34, datos de QA-34.1): regla ACTIVA "Mantenimiento" para
-  // las 20 unidades de la Torre C. Dos son locales y la regla no tiene monto para LOCAL, así que
-  // siempre dan error. El periodo de hace dos meses ya se generó; el del mes pasado, no.
+  // 10. Generación manual de cuotas
   await seedFeeGeneration(admin.id);
 
-  // 11. Morosidad (H2, datos de QA-2.1). Con lo anterior, en mora quedan A-19, A-20 y la
-  // Torre C; en la Torre B, una morosa y los casos que no deben aparecer.
+  // 11. Morosidad
   await seedDelinquency(passwordHash);
+
+  // 12. Incidencias y visitas (H7–H12)
+  await seedIncidenciasYVisitas();
 }
 
 /** Hoy (AAAA-MM-DD) en la zona del condominio, desplazado `days` días. */
@@ -423,10 +818,8 @@ async function seedDelinquency(passwordHash: string) {
     });
   };
 
-  // B-402: dos cuotas vencidas sin pagar -> en mora desde hace 87 días, adeuda 200.00.
   await fee('B-402', -87);
   await fee('B-402', -56);
-  // B-205: cuota vencida, pero pagada -> no aparece.
   const paid = await fee('B-205', -35, 'PAGADA');
   await prisma.payment.create({
     data: {
@@ -437,9 +830,7 @@ async function seedDelinquency(passwordHash: string) {
       allocations: { create: [{ feeId: paid.id, amount: 100 }] },
     },
   });
-  // B-103: vence hoy -> todavía no está vencida (solo el día en que se corre el seed).
   await fee('B-103', 0);
-  // A-202: al día, vence en 10 días.
   await fee('A-202', 10);
 
   console.log(
@@ -488,7 +879,6 @@ async function seedFeeGeneration(adminId: string) {
     },
   });
 
-  // Periodo AAAA-MM de hace `monthsAgo` meses, en la zona del condominio.
   const [year, month] = new Intl.DateTimeFormat('en-CA', {
     timeZone: process.env.APP_TIMEZONE ?? 'America/El_Salvador',
     year: 'numeric',
