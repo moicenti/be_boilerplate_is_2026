@@ -3,7 +3,11 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '@Auth/decorators';
 import { Role } from '@PrismaClient';
 import { ResumenQueryDto } from '@Reportes/dto';
-import { ReporteIncidenciasService, ResumenService } from '@Reportes/services';
+import {
+  ReporteIncidenciasService,
+  ReporteParticipacionService,
+  ResumenService,
+} from '@Reportes/services';
 
 @ApiTags('reportes')
 @ApiBearerAuth()
@@ -13,6 +17,7 @@ export class ReportesController {
   constructor(
     private readonly resumen: ResumenService,
     private readonly reporteIncidencias: ReporteIncidenciasService,
+    private readonly reporteParticipacion: ReporteParticipacionService,
   ) {}
 
   @Get('resumen')
@@ -29,5 +34,13 @@ export class ReportesController {
   })
   obtenerIncidencias(@Query() query: ResumenQueryDto) {
     return this.reporteIncidencias.obtenerReporte(query);
+  }
+
+  @Get('votaciones')
+  @ApiOperation({
+    summary: 'H29: Reporte de participación en votaciones cerradas (sin sentido del voto)',
+  })
+  obtenerVotaciones(@Query() query: ResumenQueryDto) {
+    return this.reporteParticipacion.obtenerReporte(query);
   }
 }
