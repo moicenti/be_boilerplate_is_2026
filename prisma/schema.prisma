@@ -844,6 +844,7 @@ model VisitaActiva {
   @@index([documento, estado])
   @@index([estado])
   @@map("visitas_activas")
+}
   
 // ==========================================
 // MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
