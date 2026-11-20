@@ -44,9 +44,18 @@ import { VisitasModule } from '@Visitas';
     CuotasModule,
     PagosModule,
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads'),
-      serveRoot: '/uploads',
-    }),
+   rootPath: join(process.cwd(), 'uploads'),
+    serveRoot: '/uploads',
+    serveStaticOptions: {
+      index: false,
+      fallthrough: false,
+      setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+    },
+  },
+}),
     ScheduleModule.forRoot(),
     NotificacionesModule,
     AnunciosModule,

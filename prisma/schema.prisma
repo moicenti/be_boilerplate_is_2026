@@ -64,6 +64,10 @@ model User {
   createdAssemblies        Assembly[]        @relation("AssemblyCreatedBy")
   perfilDirectorio         PerfilDirectorio?
 
+visitasRegistradas VisitaActiva[] @relation("VisitasRegistradas")
+  salidasRegistradas VisitaActiva[] @relation("SalidasRegistradas")
+  
+
   @@map("users")
 }
 
@@ -100,6 +104,8 @@ model Unit {
   feeRules         FeeRuleUnit[]
   generationErrors GenerationError[]
   payments         Payment[]
+
+  visitasActivas VisitaActiva[]
 
   @@map("units")
 }
@@ -719,6 +725,7 @@ model PreAutorizacion {
 
   residenteId String @map("residente_id") @db.Uuid
   residente   User   @relation("PreAutorizacionesCreadas", fields: [residenteId], references: [id], onDelete: Cascade)
+  visitaActiva VisitaActiva?
 
   @@index([documento])
   @@index([estado])
@@ -804,6 +811,40 @@ model VotingOption {
   @@map("opciones_votacion")
 }
 
+
+enum EstadoVisita {
+  DENTRO
+  DENTRO_SIN_AUTORIZACION
+  SALIO
+}
+
+model VisitaActiva {
+  id        String   @id @default(uuid()) @db.Uuid
+  nombreVisitante String @map("nombre_visitante")
+  documento String
+  acompanantes Int @default(0)
+  motivo    String?  // solo para "sin autorización"
+  estado    EstadoVisita
+  entrada   DateTime @default(now()) @db.Timestamptz
+  salida    DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at")
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  preautorizacionId String? @map("preautorizacion_id") @db.Uuid @unique
+  preautorizacion   PreAutorizacion? @relation(fields: [preautorizacionId], references: [id], onDelete: SetNull)
+
+  registradoPorId String @map("registrado_por_id") @db.Uuid
+  registradoPor   User   @relation("VisitasRegistradas", fields: [registradoPorId], references: [id], onDelete: Restrict)
+
+  salidaRegistradaPorId String? @map("salida_registrada_por_id") @db.Uuid
+  salidaRegistradaPor   User?  @relation("SalidasRegistradas", fields: [salidaRegistradaPorId], references: [id], onDelete: SetNull)
+
+  @@index([documento, estado])
+  @@index([estado])
+  @@map("visitas_activas")
+  
 // ==========================================
 // MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
 // ==========================================
