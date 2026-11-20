@@ -17,7 +17,7 @@ const dtoBase = {
   tipo: 'AVISO_PAQUETE',
   titulo: 'Llegó un paquete',
   mensaje: 'Paquete de DHL. Código de retiro: 482913',
-  moduloOrigen: 'paqueteria',
+  moduloOrigen: 'paqueteria' as const,
   enlaceAccion: '/paquetes/55',
 };
 

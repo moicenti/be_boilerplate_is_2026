@@ -202,7 +202,7 @@ describe('H25 + H23: la preferencia guardada se respeta al emitir', () => {
     destinatario: { tipo: 'RESIDENTE' as const, id: 'residente-1' },
     tipo: 'AVISO_PAQUETE',
     mensaje: 'Llegó un paquete',
-    moduloOrigen: 'paqueteria',
+    moduloOrigen: 'paqueteria' as const,
   };
 
   beforeEach(() => {
