@@ -23,6 +23,8 @@ export interface EnvConfig {
    * X-Forwarded-For; mal configurado, el rate limit agrupa a todos en una IP.
    */
   TRUST_PROXY_HOPS: number;
+  /** Orígenes del frontend con permiso CORS. Vacío = solo mismo origen. */
+  CORS_ORIGINS: string[];
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -104,6 +106,25 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     );
   }
 
+  // Se exige el origen exacto (esquema + host + puerto, sin barra final).
+  const corsOrigins = readString(raw, 'CORS_ORIGINS', '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  for (const origin of corsOrigins) {
+    let parsed: string | undefined;
+    try {
+      parsed = new URL(origin).origin;
+    } catch {
+      parsed = undefined;
+    }
+    if (parsed !== origin) {
+      throw new Error(
+        `CORS_ORIGINS: "${origin}" no es un origen válido (ej. https://mi-front.onrender.com).`,
+      );
+    }
+  }
+
   return {
     NODE_ENV: readString(raw, 'NODE_ENV', 'development'),
     PORT: readInt(raw, 'PORT', 3000),
@@ -115,5 +136,6 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     APP_TIMEZONE: timezone,
     PAGO_SIMULADO_ESPERA_MS: readNonNegativeInt(raw, 'PAGO_SIMULADO_ESPERA_MS', 5000),
     TRUST_PROXY_HOPS: readNonNegativeInt(raw, 'TRUST_PROXY_HOPS', 0),
+    CORS_ORIGINS: corsOrigins,
   };
 }

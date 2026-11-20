@@ -15,6 +15,9 @@ async function bootstrap() {
   const proxyHops = configService.get('TRUST_PROXY_HOPS', { infer: true });
   if (proxyHops > 0) app.set('trust proxy', proxyHops);
 
+  const corsOrigins = configService.get('CORS_ORIGINS', { infer: true });
+  if (corsOrigins.length > 0) app.enableCors({ origin: corsOrigins });
+
   configureApp(app);
 
   app.enableShutdownHooks();

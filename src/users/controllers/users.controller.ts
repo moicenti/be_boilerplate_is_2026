@@ -11,8 +11,6 @@ import {
 } from '@nestjs/swagger';
 import { Roles } from '@Auth/decorators';
 import { Role } from '@PrismaClient';
-import { Throttle, hours } from '@nestjs/throttler';
-import { Public } from '@Auth/decorators';
 import { UsersService } from '@Users/services';
 import { CreateUserDto, UserResponseDto } from '@Users/dto';
 
@@ -22,12 +20,7 @@ import { CreateUserDto, UserResponseDto } from '@Users/dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /**
-   * Registro. Crear un usuario es crear un recurso, así que es un POST a la
-   * colección `/users` y responde 201 (el default de Nest para POST).
-   */
-  @Public()
-  @Throttle({ default: { limit: 10, ttl: hours(1) } })
+  // Sin @Public(): RolesGuard deja pasar todo lo público sin mirar el rol.
   @Post()
   @Roles(Role.ADMINISTRADOR)
   @ApiOperation({ summary: 'Crea un residente o un usuario de seguridad (solo administrador)' })

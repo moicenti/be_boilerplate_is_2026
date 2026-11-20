@@ -51,6 +51,7 @@ services:
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-7}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       # Solo lo usa `prisma db seed`; vacío si no se va a sembrar.
       SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
     ports:
