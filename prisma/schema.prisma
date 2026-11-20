@@ -796,6 +796,7 @@ model VotingTopic {
   assembly        Assembly                @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
   options         VotingOption[]
   participaciones ParticipacionVotacion[]
+  votes           Vote[]
 
   @@unique([assemblyId, position])
   @@index([opensAt, closesAt])
@@ -809,6 +810,7 @@ model VotingOption {
   position Int
 
   topic VotingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  votes Vote[]
 
   @@unique([topicId, position])
   @@unique([topicId, text])
@@ -828,6 +830,18 @@ model ParticipacionVotacion {
 
   @@unique([temaId, unidadId])
   @@map("participacion_votacion")
+}
+
+model Vote {
+  id       String @id @default(uuid()) @db.Uuid
+  topicId  String @map("topic_id") @db.Uuid
+  optionId String @map("option_id") @db.Uuid
+
+  topic  VotingTopic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  option VotingOption @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@index([topicId])
+  @@map("votos")
 }
 
 enum EstadoVisita {
