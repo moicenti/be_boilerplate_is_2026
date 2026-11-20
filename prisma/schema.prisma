@@ -60,13 +60,13 @@ model User {
   notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
   lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
 
-  preAutorizacionesCreadas PreAutorizacion[] @relation("PreAutorizacionesCreadas")
-  createdAssemblies        Assembly[]        @relation("AssemblyCreatedBy")
+  preAutorizacionesCreadas PreAutorizacion[]       @relation("PreAutorizacionesCreadas")
+  createdAssemblies        Assembly[]              @relation("AssemblyCreatedBy")
+  participacionesVotacion  ParticipacionVotacion[] @relation("ParticipacionesVotacion")
   perfilDirectorio         PerfilDirectorio?
 
-visitasRegistradas VisitaActiva[] @relation("VisitasRegistradas")
+  visitasRegistradas VisitaActiva[] @relation("VisitasRegistradas")
   salidasRegistradas VisitaActiva[] @relation("SalidasRegistradas")
-  
 
   @@map("users")
 }
@@ -86,14 +86,15 @@ enum Priority {
 }
 
 model Unit {
-  id                String            @id @default(uuid()) @db.Uuid
-  code              String            @unique
-  tower             String
-  description       String
-  type              UnitType          @default(DEPARTAMENTO) @map("tipo")
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  tower       String
+  description String
+  type        UnitType @default(DEPARTAMENTO) @map("tipo")
   // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
-  active            Boolean           @default(true) @map("activa")
-  createdAt         DateTime          @default(now()) @map("created_at")
+  active      Boolean  @default(true) @map("activa")
+  createdAt   DateTime @default(now()) @map("created_at")
+
   users             User[]
   packages          Package[]
   notificaciones    Notificacion[]
@@ -105,7 +106,8 @@ model Unit {
   generationErrors GenerationError[]
   payments         Payment[]
 
-  visitasActivas VisitaActiva[]
+  visitasActivas  VisitaActiva[]
+  participaciones ParticipacionVotacion[]
 
   @@map("units")
 }
@@ -725,6 +727,7 @@ model PreAutorizacion {
 
   residenteId String @map("residente_id") @db.Uuid
   residente   User   @relation("PreAutorizacionesCreadas", fields: [residenteId], references: [id], onDelete: Cascade)
+
   visitaActiva VisitaActiva?
 
   @@index([documento])
@@ -790,8 +793,9 @@ model VotingTopic {
   closesAt    DateTime @map("closes_at")
   position    Int
 
-  assembly Assembly       @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
-  options  VotingOption[]
+  assembly        Assembly                @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  options         VotingOption[]
+  participaciones ParticipacionVotacion[]
 
   @@unique([assemblyId, position])
   @@index([opensAt, closesAt])
@@ -811,6 +815,20 @@ model VotingOption {
   @@map("opciones_votacion")
 }
 
+model ParticipacionVotacion {
+  id          String   @id @default(uuid()) @db.Uuid
+  temaId      String   @map("tema_id") @db.Uuid
+  unidadId    String   @map("unidad_id") @db.Uuid
+  residenteId String   @map("residente_id") @db.Uuid
+  fecha       DateTime @default(now()) @db.Timestamptz
+
+  topic     VotingTopic @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  unit      Unit        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  residente User        @relation("ParticipacionesVotacion", fields: [residenteId], references: [id], onDelete: Restrict)
+
+  @@unique([temaId, unidadId])
+  @@map("participacion_votacion")
+}
 
 enum EstadoVisita {
   DENTRO
@@ -819,33 +837,33 @@ enum EstadoVisita {
 }
 
 model VisitaActiva {
-  id        String   @id @default(uuid()) @db.Uuid
-  nombreVisitante String @map("nombre_visitante")
-  documento String
-  acompanantes Int @default(0)
-  motivo    String?  // solo para "sin autorización"
-  estado    EstadoVisita
-  entrada   DateTime @default(now()) @db.Timestamptz
-  salida    DateTime? @db.Timestamptz
-  createdAt DateTime @default(now()) @map("created_at")
+  id              String       @id @default(uuid()) @db.Uuid
+  nombreVisitante String       @map("nombre_visitante")
+  documento       String
+  acompanantes    Int          @default(0)
+  motivo          String? // solo para "sin autorización"
+  estado          EstadoVisita
+  entrada         DateTime     @default(now()) @db.Timestamptz
+  salida          DateTime?    @db.Timestamptz
+  createdAt       DateTime     @default(now()) @map("created_at")
 
   unidadId String @map("unidad_id") @db.Uuid
   unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Restrict)
 
-  preautorizacionId String? @map("preautorizacion_id") @db.Uuid @unique
+  preautorizacionId String?          @unique @map("preautorizacion_id") @db.Uuid
   preautorizacion   PreAutorizacion? @relation(fields: [preautorizacionId], references: [id], onDelete: SetNull)
 
   registradoPorId String @map("registrado_por_id") @db.Uuid
   registradoPor   User   @relation("VisitasRegistradas", fields: [registradoPorId], references: [id], onDelete: Restrict)
 
   salidaRegistradaPorId String? @map("salida_registrada_por_id") @db.Uuid
-  salidaRegistradaPor   User?  @relation("SalidasRegistradas", fields: [salidaRegistradaPorId], references: [id], onDelete: SetNull)
+  salidaRegistradaPor   User?   @relation("SalidasRegistradas", fields: [salidaRegistradaPorId], references: [id], onDelete: SetNull)
 
   @@index([documento, estado])
   @@index([estado])
   @@map("visitas_activas")
 }
-  
+
 // ==========================================
 // MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
 // ==========================================
