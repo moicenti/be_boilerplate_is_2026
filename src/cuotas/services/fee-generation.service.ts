@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   FeeAmountType,
   InactiveUnitPolicy,
+  Prisma,
   type GenerationOrigin,
   type GenerationRun,
-  type Prisma,
 } from '@PrismaClient';
 import {
   FeeGenerationRepository,
@@ -18,16 +18,51 @@ export const GENERATION_BATCH_SIZE = 100;
 /** Una ejecución EN_CURSO más vieja que esto se considera interrumpida. */
 export const STALE_RUN_MS = 30 * 60_000;
 
-type Outcome =
+/** Por qué una unidad del alcance no recibe su cuota (aparte de tenerla ya). */
+export type ExceptionReason =
+  'UNIDAD_INACTIVA' | 'SIN_RESPONSABLE' | 'SIN_MONTO';
+
+export type Outcome =
   | { kind: 'fee'; fee: FeeToInsert }
-  | { kind: 'omit' }
-  | { kind: 'error'; unitId: string; cause: string };
+  /** La unidad ya tiene la cuota de la regla en el periodo: cuenta como omitida. */
+  | { kind: 'existing'; unitId: string }
+  | { kind: 'omit'; unitId: string; reason: ExceptionReason }
+  | { kind: 'error'; unitId: string; reason: ExceptionReason; cause: string };
+
+export interface GenerationPlan {
+  units: ScopeUnit[];
+  /** Una por unidad, en el mismo orden que `units`. */
+  outcomes: Outcome[];
+  dueDate: Date;
+}
+
+export type GenerationResult = GenerationRun & {
+  /** Suma de los montos de las cuotas creadas en esta ejecución. */
+  totalAmount: Prisma.Decimal;
+};
 
 @Injectable()
 export class FeeGenerationService {
   private readonly logger = new Logger(FeeGenerationService.name);
 
   constructor(private readonly repository: FeeGenerationRepository) {}
+
+  /**
+   * Qué pasaría con cada unidad del alcance si se generara ahora el periodo. No escribe:
+   * es la vista previa de H34 y también el primer paso de `generate`, así ambas coinciden.
+   */
+  async plan(rule: FeeRuleWithConfig, period: string): Promise<GenerationPlan> {
+    const [units, generated] = await Promise.all([
+      this.repository.findScopeUnits(rule),
+      this.repository.findGeneratedUnitIds(rule.id, period),
+    ]);
+    const outcomes = units.map((unit): Outcome =>
+      generated.has(unit.id)
+        ? { kind: 'existing', unitId: unit.id }
+        : this.classify(rule, unit),
+    );
+    return { units, outcomes, dueDate: dueDateOf(period, rule.dueDay) };
+  }
 
   /**
    * Genera las cuotas de `period` para la regla. Idempotente: lo ya generado cuenta como
@@ -39,7 +74,7 @@ export class FeeGenerationService {
     origin: GenerationOrigin,
     userId: string | null = null,
     now = new Date(),
-  ): Promise<GenerationRun> {
+  ): Promise<GenerationResult> {
     await this.repository.closeStaleRuns(
       rule.id,
       period,
@@ -49,13 +84,14 @@ export class FeeGenerationService {
 
     // Si algo falla fuera de un lote (p. ej. se cae la base), la ejecución queda EN_CURSO
     // y se reanuda cuando se considere interrumpida.
-    const units = await this.repository.findScopeUnits(rule);
-    const outcomes = units.map((unit) => this.classify(rule, unit));
-    const dueDate = dueDateOf(period, rule.dueDay);
+    const { outcomes, dueDate } = await this.plan(rule, period);
 
+    let totalAmount = new Prisma.Decimal(0);
     for (let i = 0; i < outcomes.length; i += GENERATION_BATCH_SIZE) {
       const batch = outcomes.slice(i, i + GENERATION_BATCH_SIZE);
-      await this.saveBatch(run.id, rule, period, dueDate, batch);
+      totalAmount = totalAmount.add(
+        await this.saveBatch(run.id, rule, period, dueDate, batch),
+      );
     }
 
     const finished = await this.repository.finishRun(run.id);
@@ -63,22 +99,24 @@ export class FeeGenerationService {
       `Regla ${rule.id}, periodo ${period} (${origin}): ${finished.created} creadas, ` +
         `${finished.omitted} omitidas, ${finished.failed} con error.`,
     );
-    return finished;
+    return { ...finished, totalAmount };
   }
 
+  /** Destino de una unidad que todavía no tiene la cuota del periodo. */
   classify(rule: FeeRuleWithConfig, unit: ScopeUnit): Outcome {
     if (!unit.active || !unit.hasResident) {
-      const reason = !unit.active
-        ? 'Unidad inactiva'
-        : 'Unidad sin responsable';
+      const [reason, label]: [ExceptionReason, string] = !unit.active
+        ? ['UNIDAD_INACTIVA', 'Unidad inactiva']
+        : ['SIN_RESPONSABLE', 'Unidad sin responsable'];
       switch (rule.inactivePolicy) {
         case InactiveUnitPolicy.OMITIR:
-          return { kind: 'omit' };
+          return { kind: 'omit', unitId: unit.id, reason };
         case InactiveUnitPolicy.REVISAR:
           return {
             kind: 'error',
             unitId: unit.id,
-            cause: `${reason}: requiere revisión.`,
+            reason,
+            cause: `${label}: requiere revisión.`,
           };
         case InactiveUnitPolicy.GENERAR:
           break;
@@ -90,6 +128,7 @@ export class FeeGenerationService {
       return {
         kind: 'error',
         unitId: unit.id,
+        reason: 'SIN_MONTO',
         cause:
           rule.amountType === FeeAmountType.FIJO
             ? 'La regla no tiene monto configurado.'
@@ -115,7 +154,7 @@ export class FeeGenerationService {
     period: string,
     dueDate: Date,
     batch: Outcome[],
-  ): Promise<void> {
+  ): Promise<Prisma.Decimal> {
     const base = {
       runId,
       ruleId: rule.id,
@@ -127,11 +166,17 @@ export class FeeGenerationService {
     const errors = batch.flatMap((o) =>
       o.kind === 'error' ? [{ unitId: o.unitId, cause: o.cause }] : [],
     );
-    const omitted = batch.filter((o) => o.kind === 'omit').length;
+    const omitted = batch.filter(
+      (o) => o.kind === 'omit' || o.kind === 'existing',
+    ).length;
 
     try {
-      await this.repository.saveBatch({ ...base, fees, errors, omitted });
-      return;
+      return await this.repository.saveBatch({
+        ...base,
+        fees,
+        errors,
+        omitted,
+      });
     } catch (error) {
       // Sin cuotas en el lote no hay unidad que aislar: es un problema de la base.
       if (fees.length === 0) throw error;
@@ -142,14 +187,16 @@ export class FeeGenerationService {
 
     // El lote se revirtió entero: se aísla la unidad que falla para no perder las demás.
     await this.repository.saveBatch({ ...base, fees: [], errors, omitted });
+    let total = new Prisma.Decimal(0);
     for (const fee of fees) {
       try {
-        await this.repository.saveBatch({
+        const amount = await this.repository.saveBatch({
           ...base,
           fees: [fee],
           errors: [],
           omitted: 0,
         });
+        total = total.add(amount);
       } catch (error) {
         await this.repository.saveBatch({
           ...base,
@@ -159,6 +206,7 @@ export class FeeGenerationService {
         });
       }
     }
+    return total;
   }
 
   private describe(error: unknown): string {

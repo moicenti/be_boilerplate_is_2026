@@ -320,6 +320,175 @@ async function main() {
         `${pending.period} pendiente · saldo total 160.00`,
     );
   }
+
+  // 10. Generación manual de cuotas (H34, datos de QA-34.1): regla ACTIVA "Mantenimiento" para
+  // las 20 unidades de la Torre C. Dos son locales y la regla no tiene monto para LOCAL, así que
+  // siempre dan error. El periodo de hace dos meses ya se generó; el del mes pasado, no.
+  await seedFeeGeneration(admin.id);
+
+  // 11. Morosidad (H2, datos de QA-2.1). Con lo anterior, en mora quedan A-19, A-20 y la
+  // Torre C; en la Torre B, una morosa y los casos que no deben aparecer.
+  await seedDelinquency(passwordHash);
+}
+
+/** Hoy (AAAA-MM-DD) en la zona del condominio, desplazado `days` días. */
+function localDay(days = 0): string {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: process.env.APP_TIMEZONE ?? 'America/El_Salvador',
+  }).format(new Date());
+  return new Date(Date.parse(`${today}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+const TOWER_B_RESIDENTS = [
+  { email: 'elena.ruiz@example.com', unit: 'B-103' },
+  { email: 'jorge.salas@example.com', unit: 'B-205' },
+  { email: 'sofia.herrera@example.com', unit: 'B-402' },
+];
+
+async function seedDelinquency(passwordHash: string) {
+  const unitId = async (code: string) =>
+    (await prisma.unit.findUniqueOrThrow({ where: { code } })).id;
+  const residents = new Map<string, string>();
+  for (const resident of TOWER_B_RESIDENTS) {
+    const id = await unitId(resident.unit);
+    const user = await prisma.user.upsert({
+      where: { email: resident.email },
+      update: { unitId: id },
+      create: { email: resident.email, passwordHash, role: Role.RESIDENTE, unitId: id },
+    });
+    residents.set(resident.unit, user.id);
+  }
+
+  if ((await prisma.fee.count({ where: { unit: { tower: 'Torre B' } } })) > 0) return;
+
+  const fee = async (code: string, dueInDays: number, status: 'PENDIENTE' | 'PAGADA' = 'PENDIENTE') => {
+    const due = localDay(dueInDays);
+    return prisma.fee.create({
+      data: {
+        unitId: await unitId(code),
+        concept: 'Mantenimiento',
+        period: due.slice(0, 7),
+        amount: 100,
+        dueDate: new Date(`${due}T00:00:00Z`),
+        status,
+      },
+    });
+  };
+
+  // B-402: dos cuotas vencidas sin pagar -> en mora desde hace 87 días, adeuda 200.00.
+  await fee('B-402', -87);
+  await fee('B-402', -56);
+  // B-205: cuota vencida, pero pagada -> no aparece.
+  const paid = await fee('B-205', -35, 'PAGADA');
+  await prisma.payment.create({
+    data: {
+      unitId: paid.unitId,
+      userId: residents.get('B-205')!,
+      amount: 100,
+      reference: 'DEMO-SEED-H2-0001',
+      allocations: { create: [{ feeId: paid.id, amount: 100 }] },
+    },
+  });
+  // B-103: vence hoy -> todavía no está vencida (solo el día en que se corre el seed).
+  await fee('B-103', 0);
+  // A-202: al día, vence en 10 días.
+  await fee('A-202', 10);
+
+  console.log(
+    `Morosidad demo: B-402 en mora desde ${localDay(-87)}; B-205 pagada, ` +
+      `B-103 vence hoy (${localDay(0)}) y A-202 al día`,
+  );
+}
+
+const TOWER_C = 'Torre C';
+
+async function seedFeeGeneration(adminId: string) {
+  const exists = await prisma.feeRule.findFirst({
+    where: { scope: 'TORRE', scopeValue: TOWER_C },
+  });
+  if (exists) return;
+
+  const units = Array.from({ length: 20 }, (_, i) => {
+    const number = 101 + i;
+    const isShop = number >= 119;
+    return {
+      code: `C-${number}`,
+      tower: TOWER_C,
+      description: `${TOWER_C}, ${isShop ? 'local' : 'departamento'} ${number}`,
+      type: isShop ? ('LOCAL' as const) : ('DEPARTAMENTO' as const),
+    };
+  });
+  for (const unit of units) {
+    await prisma.unit.upsert({ where: { code: unit.code }, update: {}, create: unit });
+  }
+  const towerUnits = await prisma.unit.findMany({
+    where: { tower: TOWER_C },
+    orderBy: { code: 'asc' },
+  });
+
+  const rule = await prisma.feeRule.create({
+    data: {
+      concept: 'Mantenimiento',
+      amountType: 'POR_TIPO_UNIDAD',
+      generationDay: 1,
+      dueDay: 10,
+      scope: 'TORRE',
+      scopeValue: TOWER_C,
+      inactivePolicy: 'GENERAR',
+      createdById: adminId,
+      typeAmounts: { create: [{ unitType: 'DEPARTAMENTO', amount: 85 }] },
+    },
+  });
+
+  // Periodo AAAA-MM de hace `monthsAgo` meses, en la zona del condominio.
+  const [year, month] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: process.env.APP_TIMEZONE ?? 'America/El_Salvador',
+    year: 'numeric',
+    month: '2-digit',
+  })
+    .format(new Date())
+    .split('-')
+    .map(Number);
+  const periodAgo = (monthsAgo: number) =>
+    new Date(Date.UTC(year, month - 1 - monthsAgo, 1)).toISOString().slice(0, 7);
+
+  const generated = periodAgo(2);
+  const startedAt = new Date(`${generated}-01T06:05:00Z`);
+  const flats = towerUnits.filter((u) => u.type === 'DEPARTAMENTO');
+  const shops = towerUnits.filter((u) => u.type === 'LOCAL');
+  await prisma.generationRun.create({
+    data: {
+      ruleId: rule.id,
+      period: generated,
+      origin: 'AUTOMATICA',
+      startedAt,
+      finishedAt: new Date(startedAt.getTime() + 2000),
+      created: flats.length,
+      failed: shops.length,
+      status: 'CON_ERRORES',
+      errors: {
+        create: shops.map((u) => ({
+          unitId: u.id,
+          cause: 'La regla no tiene monto para el tipo de unidad LOCAL.',
+        })),
+      },
+    },
+  });
+  await prisma.fee.createMany({
+    data: flats.map((u) => ({
+      unitId: u.id,
+      ruleId: rule.id,
+      concept: rule.concept,
+      period: generated,
+      amount: 85,
+      dueDate: new Date(`${generated}-10T00:00:00Z`),
+    })),
+  });
+
+  console.log(
+    `Regla de cuota ${rule.id} (Torre C, 20 unidades, 2 locales sin monto): ` +
+      `${generated} generado, ${periodAgo(1)} sin generar`,
+  );
 }
 
 try {
