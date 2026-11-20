@@ -51,6 +51,7 @@ model User {
   feeRulesCreated    FeeRule[]          @relation("FeeRuleCreatedBy")
   feeRuleChanges     FeeRuleChange[]
   generationRuns     GenerationRun[]
+  payments           Payment[]          @relation("PaymentsMade")
 
   comunicados         ComunicadoOficial[] @relation("ComunicadosEmitidos")
   lecturasComunicados LecturaComunicado[] @relation("LecturasResidente")
@@ -59,8 +60,13 @@ model User {
   notificacionesRecibidas  Notificacion[]            @relation("NotificacionesRecibidas")
   lotesEmitidos            LoteNotificacion[]        @relation("LotesEmitidos")
 
-  preAutorizacionesCreadas PreAutorizacion[] @relation("PreAutorizacionesCreadas")
-  createdAssemblies Assembly[] @relation("AssemblyCreatedBy")
+  preAutorizacionesCreadas PreAutorizacion[]       @relation("PreAutorizacionesCreadas")
+  createdAssemblies        Assembly[]              @relation("AssemblyCreatedBy")
+  participacionesVotacion  ParticipacionVotacion[] @relation("ParticipacionesVotacion")
+  perfilDirectorio         PerfilDirectorio?
+
+  visitasRegistradas VisitaActiva[] @relation("VisitasRegistradas")
+  salidasRegistradas VisitaActiva[] @relation("SalidasRegistradas")
 
   @@map("users")
 }
@@ -88,12 +94,20 @@ model Unit {
   // Una unidad inactiva solo recibe cuotas automáticas según la política de cada regla.
   active      Boolean  @default(true) @map("activa")
   createdAt   DateTime @default(now()) @map("created_at")
-  users          User[]
-  packages       Package[]
-  notificaciones Notificacion[]
+
+  users             User[]
+  packages          Package[]
+  notificaciones    Notificacion[]
   preAutorizaciones PreAutorizacion[]
-  
-  reservations   Reservation[]
+
+  reservations     Reservation[]
+  fees             Fee[]
+  feeRules         FeeRuleUnit[]
+  generationErrors GenerationError[]
+  payments         Payment[]
+
+  visitasActivas  VisitaActiva[]
+  participaciones ParticipacionVotacion[]
 
   @@map("units")
 }
@@ -478,6 +492,217 @@ model LecturaComunicado {
   @@map("lectura_comunicado")
 }
 
+// ==========================================
+// Cuotas (DB-1.1) y reglas de generación (H3)
+// ==========================================
+
+enum FeeStatus {
+  PENDIENTE
+  PARCIAL
+  PAGADA
+  ANULADA
+}
+
+/// Cuota de una unidad. El saldo no se almacena: monto menos la suma de lo aplicado (H1).
+model Fee {
+  id        Int       @id @default(autoincrement())
+  unitId    String    @map("unidad_id") @db.Uuid
+  unit      Unit      @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  // Nula para cuotas creadas a mano. Restrict: una regla con cuotas no se elimina.
+  ruleId    Int?      @map("regla_id")
+  rule      FeeRule?  @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  concept   String    @map("concepto")
+  period    String    @map("periodo") @db.Char(7)
+  amount    Decimal   @map("monto") @db.Decimal(12, 2)
+  dueDate   DateTime  @map("fecha_vencimiento") @db.Date
+  status    FeeStatus @default(PENDIENTE) @map("estado")
+  createdAt DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  allocations PaymentAllocation[]
+
+  @@unique([unitId, ruleId, period], map: "cuota_unidad_regla_periodo_key")
+  @@index([unitId, status])
+  @@index([status, dueDate])
+  @@map("cuota")
+}
+
+/// Pago de un residente (H1): una operación que puede cubrir varias cuotas de su unidad.
+model Payment {
+  id        Int      @id @default(autoincrement())
+  unitId    String   @map("unidad_id") @db.Uuid
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  amount    Decimal  @map("monto") @db.Decimal(12, 2)
+  paidAt    DateTime @default(now()) @map("fecha_pago") @db.Timestamptz(6)
+  // Quién pagó. Restrict: el historial de pagos no se pierde al borrar un usuario.
+  userId    String   @map("usuario_id") @db.Uuid
+  user      User     @relation("PaymentsMade", fields: [userId], references: [id], onDelete: Restrict)
+  // Única cuando existe: una referencia repetida es un doble cobro.
+  reference String?  @unique @map("referencia")
+
+  allocations PaymentAllocation[]
+
+  @@index([unitId, paidAt])
+  @@map("pago")
+}
+
+/// Monto de un pago aplicado a una cuota.
+model PaymentAllocation {
+  id        Int     @id @default(autoincrement())
+  paymentId Int     @map("pago_id")
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  // Restrict: una cuota con pagos no se elimina, solo se anula.
+  feeId     Int     @map("cuota_id")
+  fee       Fee     @relation(fields: [feeId], references: [id], onDelete: Restrict)
+  amount    Decimal @map("monto") @db.Decimal(12, 2)
+
+  @@unique([paymentId, feeId])
+  @@index([feeId])
+  @@map("pago_cuota")
+}
+
+enum FeeAmountType {
+  FIJO
+  POR_TIPO_UNIDAD
+}
+
+enum FeeRuleScope {
+  TODAS
+  TIPO
+  TORRE
+  SELECCION
+}
+
+enum InactiveUnitPolicy {
+  GENERAR
+  OMITIR
+  REVISAR
+}
+
+enum FeeRuleStatus {
+  ACTIVA
+  PAUSADA
+  INACTIVA
+}
+
+model FeeRule {
+  id             Int                @id @default(autoincrement())
+  concept        String             @map("concepto")
+  amountType     FeeAmountType      @map("tipo_monto")
+  // Nulo mientras la regla está incompleta (no se puede activar así).
+  amount         Decimal?           @map("monto") @db.Decimal(12, 2)
+  generationDay  Int                @map("dia_generacion") @db.SmallInt
+  dueDay         Int                @map("dia_vencimiento") @db.SmallInt
+  scope          FeeRuleScope       @map("alcance")
+  // Torre (alcance TORRE) o tipo de unidad (alcance TIPO).
+  scopeValue     String?            @map("alcance_valor")
+  inactivePolicy InactiveUnitPolicy @default(OMITIR) @map("politica_inactivas")
+  status         FeeRuleStatus      @default(ACTIVA) @map("estado")
+  createdById    String?            @map("creado_por") @db.Uuid
+  createdBy      User?              @relation("FeeRuleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now()) @map("creado_en") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+
+  units       FeeRuleUnit[]
+  typeAmounts FeeRuleTypeAmount[]
+  fees        Fee[]
+  runs        GenerationRun[]
+  changes     FeeRuleChange[]
+
+  @@index([status, generationDay])
+  @@map("regla_cuota")
+}
+
+/// Unidades de una regla con alcance SELECCION.
+model FeeRuleUnit {
+  ruleId Int     @map("regla_id")
+  rule   FeeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  unitId String  @map("unidad_id") @db.Uuid
+  unit   Unit    @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@id([ruleId, unitId])
+  @@map("regla_cuota_unidad")
+}
+
+/// Monto por tipo de unidad de una regla POR_TIPO_UNIDAD.
+model FeeRuleTypeAmount {
+  ruleId   Int      @map("regla_id")
+  rule     FeeRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  unitType UnitType @map("tipo_unidad")
+  amount   Decimal  @map("monto") @db.Decimal(12, 2)
+
+  @@id([ruleId, unitType])
+  @@map("regla_cuota_monto_tipo")
+}
+
+enum FeeRuleAction {
+  CREACION
+  EDICION
+  CAMBIO_ESTADO
+}
+
+/// Auditoría de reglas: quién cambió qué y cuándo.
+model FeeRuleChange {
+  id            Int           @id @default(autoincrement())
+  ruleId        Int           @map("regla_id")
+  rule          FeeRule       @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  action        FeeRuleAction @map("accion")
+  previousValue Json?         @map("valor_anterior")
+  newValue      Json          @map("valor_nuevo")
+  changedById   String?       @map("usuario_id") @db.Uuid
+  changedBy     User?         @relation(fields: [changedById], references: [id], onDelete: SetNull)
+  changedAt     DateTime      @default(now()) @map("cambiado_en") @db.Timestamptz(6)
+
+  @@index([ruleId])
+  @@map("regla_cuota_historial")
+}
+
+enum GenerationOrigin {
+  AUTOMATICA
+  MANUAL
+}
+
+enum GenerationRunStatus {
+  EN_CURSO
+  COMPLETADA
+  CON_ERRORES
+}
+
+model GenerationRun {
+  id         Int                 @id @default(autoincrement())
+  ruleId     Int                 @map("regla_id")
+  rule       FeeRule             @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  period     String              @map("periodo") @db.Char(7)
+  origin     GenerationOrigin    @map("origen")
+  // Nulo si es automática.
+  userId     String?             @map("usuario_id") @db.Uuid
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  startedAt  DateTime            @default(now()) @map("inicio") @db.Timestamptz(6)
+  finishedAt DateTime?           @map("fin") @db.Timestamptz(6)
+  created    Int                 @default(0) @map("creadas")
+  omitted    Int                 @default(0) @map("omitidas")
+  failed     Int                 @default(0) @map("con_error")
+  status     GenerationRunStatus @default(EN_CURSO) @map("estado")
+
+  errors GenerationError[]
+
+  // Nunca dos ejecuciones en curso para la misma regla y periodo.
+  @@unique([ruleId, period], map: "ejecucion_generacion_en_curso_key", where: raw("estado = 'EN_CURSO'"))
+  @@index([ruleId, period])
+  @@map("ejecucion_generacion")
+}
+
+model GenerationError {
+  id     Int           @id @default(autoincrement())
+  runId  Int           @map("ejecucion_id")
+  run    GenerationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  unitId String        @map("unidad_id") @db.Uuid
+  unit   Unit          @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  cause  String        @map("causa")
+
+  @@index([runId])
+  @@map("ejecucion_error")
+}
+
 enum EstadoPreAutorizacion {
   VIGENTE
   USADA
@@ -503,10 +728,13 @@ model PreAutorizacion {
   residenteId String @map("residente_id") @db.Uuid
   residente   User   @relation("PreAutorizacionesCreadas", fields: [residenteId], references: [id], onDelete: Cascade)
 
+  visitaActiva VisitaActiva?
+
   @@index([documento])
   @@index([estado])
   @@map("pre_autorizaciones")
 }
+
 enum AssemblyType {
   ORDINARIA
   EXTRAORDINARIA
@@ -565,8 +793,10 @@ model VotingTopic {
   closesAt    DateTime @map("closes_at")
   position    Int
 
-  assembly Assembly       @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
-  options  VotingOption[]
+  assembly        Assembly                @relation(fields: [assemblyId], references: [id], onDelete: Cascade)
+  options         VotingOption[]
+  participaciones ParticipacionVotacion[]
+  votes           Vote[]
 
   @@unique([assemblyId, position])
   @@index([opensAt, closesAt])
@@ -580,8 +810,95 @@ model VotingOption {
   position Int
 
   topic VotingTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  votes Vote[]
 
   @@unique([topicId, position])
   @@unique([topicId, text])
   @@map("opciones_votacion")
+}
+
+model ParticipacionVotacion {
+  id          String   @id @default(uuid()) @db.Uuid
+  temaId      String   @map("tema_id") @db.Uuid
+  unidadId    String   @map("unidad_id") @db.Uuid
+  residenteId String   @map("residente_id") @db.Uuid
+  fecha       DateTime @default(now()) @db.Timestamptz
+
+  topic     VotingTopic @relation(fields: [temaId], references: [id], onDelete: Cascade)
+  unit      Unit        @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+  residente User        @relation("ParticipacionesVotacion", fields: [residenteId], references: [id], onDelete: Restrict)
+
+  @@unique([temaId, unidadId])
+  @@map("participacion_votacion")
+}
+
+model Vote {
+  id       String @id @default(uuid()) @db.Uuid
+  topicId  String @map("topic_id") @db.Uuid
+  optionId String @map("option_id") @db.Uuid
+
+  topic  VotingTopic  @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  option VotingOption @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@index([topicId])
+  @@map("votos")
+}
+
+enum EstadoVisita {
+  DENTRO
+  DENTRO_SIN_AUTORIZACION
+  SALIO
+}
+
+model VisitaActiva {
+  id              String       @id @default(uuid()) @db.Uuid
+  nombreVisitante String       @map("nombre_visitante")
+  documento       String
+  acompanantes    Int          @default(0)
+  motivo          String? // solo para "sin autorización"
+  estado          EstadoVisita
+  entrada         DateTime     @default(now()) @db.Timestamptz
+  salida          DateTime?    @db.Timestamptz
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  unidadId String @map("unidad_id") @db.Uuid
+  unidad   Unit   @relation(fields: [unidadId], references: [id], onDelete: Restrict)
+
+  preautorizacionId String?          @unique @map("preautorizacion_id") @db.Uuid
+  preautorizacion   PreAutorizacion? @relation(fields: [preautorizacionId], references: [id], onDelete: SetNull)
+
+  registradoPorId String @map("registrado_por_id") @db.Uuid
+  registradoPor   User   @relation("VisitasRegistradas", fields: [registradoPorId], references: [id], onDelete: Restrict)
+
+  salidaRegistradaPorId String? @map("salida_registrada_por_id") @db.Uuid
+  salidaRegistradaPor   User?   @relation("SalidasRegistradas", fields: [salidaRegistradaPorId], references: [id], onDelete: SetNull)
+
+  @@index([documento, estado])
+  @@index([estado])
+  @@map("visitas_activas")
+}
+
+// ==========================================
+// MÓDULO 8: DIRECTORIO DE RESIDENTES (H21)
+// ==========================================
+
+model PerfilDirectorio {
+  id              Int      @id @default(autoincrement())
+  userId          String   @unique @map("user_id") @db.Uuid
+  nombre          String?  @db.VarChar(100)
+  apellido        String?  @db.VarChar(80)
+  telefono        String?  @db.VarChar(20)
+  visibleGlobal   Boolean  @default(false) @map("visible_global")
+  mostrarTelefono Boolean  @default(false) @map("mostrar_telefono")
+  mostrarCorreo   Boolean  @default(false) @map("mostrar_correo")
+  mostrarNombre   Boolean  @default(false) @map("mostrar_nombre")
+  mostrarUnidad   Boolean  @default(false) @map("mostrar_unidad")
+  actualizadoEn   DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([nombre, apellido])
+  @@index([apellido])
+  @@index([visibleGlobal])
+  @@map("privacidad_directorio")
 }

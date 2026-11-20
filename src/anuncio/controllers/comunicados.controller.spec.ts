@@ -22,8 +22,10 @@ describe('ComunicadosController (H19 & H20)', () => {
     controller = new ComunicadosController(service as unknown as ComunicadosService);
   });
 
-  it('debe responder con MethodNotAllowedException (405) al intentar alterar un comunicado', () => {
-    expect(() => controller.bloquearEdicion()).toThrow(MethodNotAllowedException);
+  it('debe responder con MethodNotAllowedException (405) en PUT, PATCH y DELETE', () => {
+    expect(() => controller.bloquearPut()).toThrow(MethodNotAllowedException);
+    expect(() => controller.bloquearPatch()).toThrow(MethodNotAllowedException);
+    expect(() => controller.bloquearDelete()).toThrow(MethodNotAllowedException);
   });
 
   it('debe delegar la consulta del muro segmentado del residente al servicio', async () => {

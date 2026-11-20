@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
-import { FeeRulesController } from './controllers/index.js';
+import {
+  FeeGenerationController,
+  FeeRulesController,
+} from './controllers/index.js';
 import {
   FeeGenerationScheduler,
   FeeGenerationService,
   FeeRulesService,
+  ManualFeeGenerationService,
 } from './services/index.js';
 import {
   FeeGenerationRepository,
@@ -11,15 +15,15 @@ import {
 } from './repositories/index.js';
 
 @Module({
-  controllers: [FeeRulesController],
+  controllers: [FeeRulesController, FeeGenerationController],
   providers: [
     FeeRulesService,
+    ManualFeeGenerationService,
     FeeGenerationService,
     FeeGenerationScheduler,
     FeeRuleRepository,
     FeeGenerationRepository,
   ],
-  // H34 (generación manual) reutiliza el motor.
   exports: [FeeGenerationService],
 })
 export class CuotasModule {}

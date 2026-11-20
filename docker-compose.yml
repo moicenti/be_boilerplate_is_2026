@@ -52,6 +52,11 @@ services:
       - '${PORT:-3000}:3000'
     # Aplica las migraciones pendientes antes de levantar el servidor.
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
+    volumes:
+      # Archivos subidos (incidencias, anuncios). Sin volumen se pierden en
+      # cada `docker compose up --build`.
+      - uploads:/app/uploads
 
 volumes:
   pgdata:
+  uploads:

@@ -15,14 +15,19 @@ import { IncidenciasModule } from './incidencias/incidencias.module.js';
 import { UnidadesModule } from '@Unidades';
 import { PaquetesModule } from '@Paquetes';
 import { CommonAreasModule } from '@CommonAreas';
+import { ReservasModule } from '@Reservas';
+import { CuotasModule } from '@Cuotas';
+import { PagosModule } from '@Pagos';
 import { AnunciosModule } from './anuncio/index.js';
+import { VisitasModule } from '@Visitas';
+import { DirectorioModule } from './directorio/index.js';
+import { ReportesModule } from './reportes/index.js'; // <-- Ya incluido desde develop
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      // Si falta DATABASE_URL o JWT_SECRET, la app no arranca.
       validate: validateEnv,
     }),
     PrismaModule,
@@ -33,9 +38,24 @@ import { AnunciosModule } from './anuncio/index.js';
     UnidadesModule,
     PaquetesModule,
     CommonAreasModule,
+    VisitasModule,
+    ReservasModule,
+    CuotasModule,
+    PagosModule,
+    DirectorioModule,
+    ReportesModule, // <-- Módulo de H26/H30 ya registrado
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',
+      serveStaticOptions: {
+        index: false,
+        fallthrough: false,
+        setHeaders: (res) => {
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Content-Disposition', 'inline');
+          res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
+        },
+      },
     }),
     ScheduleModule.forRoot(),
     NotificacionesModule,
@@ -43,7 +63,6 @@ import { AnunciosModule } from './anuncio/index.js';
   ],
   providers: [
     {
-      // Todo cerrado por defecto: las rutas públicas se abren con @Public().
       provide: APP_GUARD,
       useExisting: JwtAuthGuard,
     },

@@ -17,6 +17,9 @@ API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con aut
 - [Autenticación](#autenticación)
 - [Endpoints](#endpoints)
 - [Cuotas y generación automática (H3)](#cuotas-y-generación-automática-h3)
+- [Generación manual de cuotas (H34)](#generación-manual-de-cuotas-h34)
+- [Estado de cuenta y pago de cuotas (H1)](#estado-de-cuenta-y-pago-de-cuotas-h1)
+- [Unidades en mora (H2)](#unidades-en-mora-h2)
 - [Arquitectura por capas](#arquitectura-por-capas)
 - [Path aliases](#path-aliases)
 - [Estructura del proyecto](#estructura-del-proyecto)
@@ -83,6 +86,7 @@ cp .env.example .env
 | `REFRESH_TOKEN_EXPIRES_IN_DAYS` | `7` | Vigencia del refresh token |
 | `BCRYPT_SALT_ROUNDS` | `12` | Cost factor de bcrypt |
 | `APP_TIMEZONE` | `America/El_Salvador` | Zona horaria IANA en la que se interpretan los horarios de las áreas comunes |
+| `PAGO_SIMULADO_ESPERA_MS` | `5000` | Espera de la pasarela de pago simulada (H1). Las pruebas e2e la ponen en `0` |
 
 > La app **valida el entorno al arrancar** ([env.validation.ts](src/config/env.validation.ts)). Si falta `DATABASE_URL` o `JWT_SECRET`, o si el secreto es más corto que 32 caracteres, falla de inmediato con un mensaje claro en lugar de romperse más tarde.
 
@@ -318,8 +322,14 @@ Base: `http://localhost:3000/api/v1` · Documentación interactiva: `http://loca
 | `PUT` | `/reglas-cuota/{id}` | Bearer · `ADMINISTRADOR` | `200` | Reemplaza la configuración; solo afecta periodos futuros (H3) |
 | `PATCH` | `/reglas-cuota/{id}/estado` | Bearer · `ADMINISTRADOR` | `200` | Activa, pausa o desactiva; `409` `TRANSICION_INVALIDA` si ya tiene ese estado, `422` al activar una regla incompleta (H3) |
 | `GET` | `/reglas-cuota/{id}/historial` | Bearer · `ADMINISTRADOR` | `200` | Auditoría: creación, ediciones y cambios de estado con usuario y fecha (H3) |
+| `POST` | `/reglas-cuota/{id}/generacion/vista-previa` | Bearer · `ADMINISTRADOR` | `200` | Simula la generación de `{"periodo": "AAAA-MM"}` sin escribir: cuotas por crear, monto total, ya generadas y excepciones. `400` periodo inválido, `404` `REGLA_INEXISTENTE`, `422` `REGLA_INACTIVA` (regla no activa o periodo futuro) (H34) |
+| `POST` | `/reglas-cuota/{id}/generacion` | Bearer · `ADMINISTRADOR` | `200` | Genera las cuotas faltantes del periodo: creadas, omitidas, errores con su causa y monto total. Mismos errores que la vista previa, más `409` `EJECUCION_EN_CURSO` (H34) |
+| `GET` | `/reglas-cuota/{id}/ejecuciones?pagina=&tamano=` | Bearer · `ADMINISTRADOR` | `200` | Historial paginado de ejecuciones automáticas y manuales (H34) |
+| `GET` | `/unidades/{unidadId}/estado-de-cuenta` | Bearer · `RESIDENTE` (su unidad) o `ADMINISTRADOR` | `200` | Saldo total, cuotas con su saldo y pagos de la unidad. `400` id no UUID, `403` `RECURSO_AJENO`, `404` `UNIDAD_INEXISTENTE` (H1) |
+| `POST` | `/pagos` | Bearer · `RESIDENTE` | `201` | Paga una o varias cuotas de su unidad. `400` lista vacía o monto ≤ 0, `402` `PAGO_RECHAZADO`, `403` `RECURSO_AJENO`, `404` `CUOTA_INEXISTENTE`, `409` `CUOTA_YA_PAGADA` (o referencia repetida), `422` `MONTO_EXCEDE_DEUDA` (H1) |
+| `GET` | `/unidades/mora?torre=&antiguedadMinDias=&pagina=&tamano=&orden=` | Bearer · `ADMINISTRADOR` | `200` | Unidades en mora con desde cuándo, días de atraso, monto adeudado y cuotas vencidas. `400` `SOLICITUD_INVALIDA` (H2) |
 
-Los endpoints de áreas, reservas y reglas de cuota responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
+Los endpoints de áreas, reservas, reglas de cuota y pagos responden los errores con el formato común `{"codigo": "...", "mensaje": "..."}` (ver [api-exception.filter.ts](src/common/filters/api-exception.filter.ts)).
 
 ### Ejemplos
 
@@ -401,7 +411,7 @@ El administrador define **reglas de cuota**; una tarea diaria genera las cuotas 
 
 | Tabla | Contenido |
 |---|---|
-| `cuota` | Cuota de una unidad (DB-1.1): `unidad_id`, `regla_id` (nula si se creó a mano), `concepto`, `periodo` (`AAAA-MM`), `monto` (> 0), `fecha_vencimiento`, `estado` (`PENDIENTE`, `PARCIAL`, `PAGADA`, `ANULADA`). Único `(unidad_id, regla_id, periodo)`: no hay duplicados. El saldo no se almacena; los pagos llegan con H1 |
+| `cuota` | Cuota de una unidad (DB-1.1): `unidad_id`, `regla_id` (nula si se creó a mano), `concepto`, `periodo` (`AAAA-MM`), `monto` (> 0), `fecha_vencimiento`, `estado` (`PENDIENTE`, `PARCIAL`, `PAGADA`, `ANULADA`). Único `(unidad_id, regla_id, periodo)`: no hay duplicados. El saldo no se almacena: se calcula con los pagos (ver [H1](#estado-de-cuenta-y-pago-de-cuotas-h1)) |
 | `regla_cuota` | `concepto`, `tipo_monto` (`FIJO` o `POR_TIPO_UNIDAD`), `monto`, `dia_generacion` y `dia_vencimiento` (1 a 28, vencimiento ≥ generación), `alcance` (`TODAS`, `TIPO`, `TORRE`, `SELECCION`) y `alcance_valor` (qué torre o qué tipo), `politica_inactivas`, `estado` (`ACTIVA`, `PAUSADA`, `INACTIVA`), `creado_por`, `creado_en`. Una sola regla no INACTIVA por concepto (sin mayúsculas) y alcance |
 | `regla_cuota_unidad` | Unidades de una regla con alcance `SELECCION` |
 | `regla_cuota_monto_tipo` | Monto por tipo de unidad de una regla `POR_TIPO_UNIDAD` |
@@ -435,6 +445,124 @@ Una regla con cuotas no se puede eliminar (`ON DELETE RESTRICT`): solo desactiva
 - **Concurrencia:** un índice único parcial impide dos ejecuciones `EN_CURSO` para la misma regla y periodo.
 - **Reanudación:** si el proceso se cae, su ejecución queda `EN_CURSO`. Pasados 30 minutos se considera interrumpida: la tarea del día siguiente la cierra como `CON_ERRORES` y genera solo lo faltante del periodo.
 - Una regla que falla no detiene a las demás.
+
+## Generación manual de cuotas (H34)
+
+El administrador genera a pedido el periodo de una regla, por ejemplo para recuperar un mes que la tarea automática no generó. Usa el mismo motor que la tarea programada de H3 ([fee-generation.service.ts](src/cuotas/services/fee-generation.service.ts)), así que se comporta igual y es igual de idempotente; la ejecución queda con origen `MANUAL` y el usuario que la confirmó.
+
+### Flujo
+
+1. **Vista previa** (`POST /reglas-cuota/{id}/generacion/vista-previa`): no escribe nada. Calcula lo mismo que haría la ejecución en ese momento:
+
+   | Campo | Significado | En la ejecución |
+   |---|---|---|
+   | `cantidadUnidades` | Unidades a las que se les crearía la cuota | `creadas` |
+   | `montoTotal` | Suma de esas cuotas | `montoTotal` |
+   | `yaGeneradas` | Unidades que ya tienen la cuota del periodo | parte de `omitidas` |
+   | `excepciones[]` | Unidades que no recibirán cuota: `motivo` (`UNIDAD_INACTIVA`, `SIN_RESPONSABLE`, `SIN_MONTO`) y `resultado` (`OMITIDA` o `ERROR`, según la política de la regla) | `omitidas` o `errores` |
+   | `fechaVencimiento` | Día de vencimiento de las cuotas del periodo | — |
+
+   Si nada cambia entre la vista previa y la confirmación, los totales coinciden.
+2. **Ejecución** (`POST /reglas-cuota/{id}/generacion`): genera solo las cuotas faltantes y responde `ejecucionId`, `estado` (`COMPLETADA` o `CON_ERRORES`), `creadas`, `omitidas`, `errores` (`unidadId`, `codigoUnidad`, `causa`) y `montoTotal` (lo creado en esta ejecución). Volver a ejecutar un periodo completo devuelve `creadas: 0` y todo como omitido.
+3. **Historial** (`GET /reglas-cuota/{id}/ejecuciones?pagina=1&tamano=20`): `{total, pagina, tamano, items}`, de la más reciente a la más antigua. Cada ítem trae `fecha` (inicio, con el offset de `APP_TIMEZONE`), `origen`, `usuario` (correo; `null` en las automáticas), `periodo`, `estado`, `creadas`, `omitidas` y `conError`. `tamano` va de 1 a 100.
+
+### Reglas
+
+- Solo reglas `ACTIVA`, igual que la tarea automática. Una regla `PAUSADA` o `INACTIVA` responde `422 REGLA_INACTIVA`.
+- Se puede generar el periodo actual y cualquiera anterior; un periodo futuro (según `APP_TIMEZONE`) también responde `422 REGLA_INACTIVA`. El mensaje indica cuál de los dos casos es.
+- Si ya hay una ejecución `EN_CURSO` de la regla para ese periodo (automática o manual), responde `409 EJECUCION_EN_CURSO` sin crear nada. Una ejecución `EN_CURSO` de hace más de 30 minutos se considera interrumpida: se cierra y se genera lo faltante.
+- Una unidad que ya tiene la cuota del periodo siempre cuenta como omitida, aunque después haya quedado inactiva o sin responsable.
+
+### Datos demo (QA-34.1)
+
+`npm run db:seed` crea la regla ACTIVA "Mantenimiento" para la **Torre C** (20 unidades, `C-101` a `C-120`; 85.00 por departamento). `C-119` y `C-120` son locales y la regla no tiene monto para `LOCAL`, así que siempre dan error. El periodo de hace dos meses ya está generado (ejecución automática con 18 creadas y 2 errores) y el del mes pasado no.
+
+## Estado de cuenta y pago de cuotas (H1)
+
+El residente consulta el estado de cuenta de su unidad y paga una o varias cuotas; el administrador consulta el de cualquier unidad. Código en [src/pagos](src/pagos).
+
+### Tablas
+
+Un pago es una operación que puede cubrir varias cuotas, así que se guarda en dos tablas:
+
+| Tabla | Contenido |
+|---|---|
+| `pago` | Una fila por pago: `unidad_id`, `monto` total (> 0), `fecha_pago`, `usuario_id` (quién pagó) y `referencia` (opcional, **única** cuando existe: una referencia repetida es un doble cobro) |
+| `pago_cuota` | Lo aplicado a cada cuota: `pago_id`, `cuota_id` y `monto` (> 0). Índice por `cuota_id`; `ON DELETE RESTRICT` hacia `cuota`, así que una cuota con pagos no se elimina: solo se anula |
+
+```mermaid
+erDiagram
+    units ||--o{ cuota : tiene
+    units ||--o{ pago : registra
+    users ||--o{ pago : paga
+    pago ||--|{ pago_cuota : aplica
+    cuota ||--o{ pago_cuota : recibe
+```
+
+La migración [20261117120000_h1_cuotas_y_pagos](prisma/migrations/20261117120000_h1_cuotas_y_pagos/migration.sql) crea estas tablas y **vuelve a crear las de H3**: la migración `20261116042048_agregar_modulo_anuncios` las había eliminado porque se generó con un `schema.prisma` al que un merge le quitó los modelos de cuotas. Para revertirla: `npx prisma db execute --file prisma/migrations/20261117120000_h1_cuotas_y_pagos/down.sql`.
+
+### Reglas
+
+- **Saldo de una cuota** = monto − suma de lo aplicado. **`saldoTotal`** = suma de los saldos de las cuotas no anuladas. Nada de esto se almacena; se calcula en cada consulta.
+- **Aplicación del pago:** el monto se reparte por fecha de vencimiento ascendente (a igual fecha, por id). Cada cuota recibe hasta su saldo y queda `PAGADA` si llega a 0 o `PARCIAL` si le queda saldo; si el monto no alcanza para una cuota elegida, figura con `montoAplicado: 0` y conserva su estado.
+- **Validaciones, en orden:** la cuota existe en la unidad (`404`), no está pagada ni anulada (`409`), el monto no supera lo adeudado en las cuotas elegidas (`422`), la referencia no se usó (`409`).
+- **Una sola transacción:** las cuotas elegidas se bloquean (`SELECT … FOR UPDATE`) y se vuelven a validar antes de insertar. Si algo falla no queda ningún pago registrado, y dos pagos simultáneos de la misma cuota no pueden aplicar el mismo saldo: el segundo recibe `409`.
+- `saldoRestante` en la respuesta del pago es el saldo total de la unidad después de pagar.
+
+### Tarjeta de prueba
+
+`POST /pagos` acepta `tarjetaUltimos4` (opcional, solo los últimos 4 dígitos, nunca el número completo). Si se envía, una **pasarela simulada** espera `PAGO_SIMULADO_ESPERA_MS` (5 s) y:
+
+| Tarjeta termina en | Resultado |
+|---|---|
+| `2000` | Rechazada: `402 PAGO_RECHAZADO`, no se registra nada |
+| `2026` (o cualquier otra) | Aceptada: se registra el pago |
+
+Las validaciones de cuotas y monto se hacen **antes** de la espera, así que un pago inválido nunca llega a la pasarela.
+
+### Datos de prueba
+
+El seed crea en la unidad `A-19` (`demo@example.com`) una cuota pagada, una con pago parcial y una pendiente, y en `A-20` (`otro@example.com`) una cuota pendiente de otra unidad. El `unidadId` de cada residente sale de `GET /auth/me` (`unit.id`).
+
+## Unidades en mora (H2)
+
+`GET /api/v1/unidades/mora` (solo `ADMINISTRADOR`). Consulta de solo lectura: nada se guarda, se calcula de `cuota` y `pago_cuota` en cada consulta, así que una unidad que paga todo lo vencido deja de aparecer en la siguiente. Código en [src/pagos](src/pagos) ([regla de mora](src/pagos/utils/delinquency.ts)).
+
+### Regla
+
+- Una cuota está **vencida** si está `PENDIENTE` o `PARCIAL`, tiene saldo (monto menos lo pagado) y su vencimiento es **anterior a hoy** en `APP_TIMEZONE`. Una cuota que vence hoy todavía no está vencida; `PAGADA` y `ANULADA` nunca cuentan.
+- Una unidad está **en mora** si tiene al menos una cuota vencida. Se incluyen también las unidades inactivas, porque la deuda sigue existiendo.
+- `enMoraDesde`: el vencimiento más antiguo de sus cuotas vencidas. `diasAtraso`: hoy menos `enMoraDesde`. `montoAdeudado`: suma de los saldos de las cuotas vencidas (no incluye las que aún no vencen). `cuotasVencidas`: cuántas son.
+
+### Parámetros
+
+| Parámetro | Valores | Por defecto |
+|---|---|---|
+| `torre` | Torre exacta, sin distinguir mayúsculas (`Torre A`) | todas |
+| `antiguedadMinDias` | Entero ≥ 0: solo unidades con `diasAtraso` ≥ ese valor | sin filtro |
+| `pagina` / `tamano` | Entero ≥ 1 / 1 a 100 | 1 / 20 |
+| `orden` | `unidad`, `responsable`, `enMoraDesde`, `diasAtraso`, `montoAdeudado`, `cuotasVencidas`; con `-` delante, descendente. Empata por código de unidad | `-diasAtraso` |
+
+Un parámetro desconocido o inválido responde `400 SOLICITUD_INVALIDA`.
+
+### Respuesta
+
+```json
+{
+  "total": 21, "pagina": 1, "tamano": 20, "fechaCorte": "2026-11-18",
+  "items": [
+    { "unidadId": "…uuid…", "codigoUnidad": "B-402", "torre": "Torre B",
+      "responsable": "sofia.herrera@example.com", "enMoraDesde": "2026-08-23",
+      "diasAtraso": 87, "montoAdeudado": 200.00, "cuotasVencidas": 2 }
+  ]
+}
+```
+
+`responsable` es el correo del residente activo más antiguo de la unidad (los usuarios no tienen nombre) y es `null` si no tiene ninguno. `fechaCorte` es el "hoy" usado en el cálculo. Para ver el detalle de una unidad: `GET /unidades/{unidadId}/estado-de-cuenta`.
+
+### Datos demo (QA-2.1)
+
+Con `npm run db:seed` quedan en mora A-19 y A-20 (Torre A, datos de H1), las 18 cuotas generadas de la Torre C (H34) y **B-402** (dos cuotas vencidas hace 87 y 56 días). No deben aparecer **B-205** (cuota vencida pero pagada), **B-103** (vence el día en que se corre el seed) ni **A-202** (vence en 10 días). Los residentes de la Torre B (`elena.ruiz@`, `jorge.salas@`, `sofia.herrera@example.com`) usan la contraseña `Demo1234!`.
 
 ## Arquitectura por capas
 
