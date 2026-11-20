@@ -4,7 +4,25 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Role } from '../src/generated/prisma/client.js';
 
 const DEMO_EMAIL = 'demo@example.com';
-const DEMO_PASSWORD = 'Demo1234!';
+// La contraseña de las cuentas demo (incluido el administrador) sale del
+// entorno y nunca del repo: el código es público.
+const DEMO_PASSWORD = readDemoPassword();
+
+function readDemoPassword(): string {
+  const value = process.env.SEED_DEMO_PASSWORD ?? '';
+  const valid =
+    value.length >= 12 &&
+    value.length <= 72 &&
+    /[a-z]/.test(value) &&
+    /[A-Z]/.test(value) &&
+    /\d/.test(value);
+  if (!valid) {
+    throw new Error(
+      'Define SEED_DEMO_PASSWORD en el entorno (12 a 72 caracteres, con minúscula, mayúscula y número).',
+    );
+  }
+  return value;
+}
 
 const UNITS = [
   { code: 'A-19', tower: 'Torre A', description: 'Torre A, departamento 19' },
@@ -132,31 +150,31 @@ async function main() {
   // 3. Usuario demo (A-19)
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
-    update: { unitId: unitByCode.get('A-19') ?? null },
+    update: { passwordHash, unitId: unitByCode.get('A-19') ?? null },
     create: {
       email: DEMO_EMAIL,
       passwordHash,
       unitId: unitByCode.get('A-19') ?? null,
     },
   });
-  console.log(`Usuario demo listo: ${user.email} / ${DEMO_PASSWORD}`);
+  console.log(`Usuario demo listo: ${user.email}`);
 
   // 4. Otro usuario (A-20)
   const user2 = await prisma.user.upsert({
     where: { email: 'otro@example.com' },
-    update: { unitId: unitByCode.get('A-20') ?? null },
+    update: { passwordHash, unitId: unitByCode.get('A-20') ?? null },
     create: {
       email: 'otro@example.com',
       passwordHash,
       unitId: unitByCode.get('A-20') ?? null,
     },
   });
-  console.log(`Usuario demo listo: ${user2.email} / ${DEMO_PASSWORD}`);
+  console.log(`Usuario demo listo: ${user2.email}`);
 
   // 5. Admin (sin unidad)
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
-    update: { role: 'ADMINISTRADOR', unitId: null },
+    update: { passwordHash, role: 'ADMINISTRADOR', unitId: null },
     create: {
       email: 'admin@example.com',
       passwordHash,
@@ -164,13 +182,13 @@ async function main() {
       unitId: null,
     },
   });
-  console.log(`Administrador demo listo: ${admin.email} / ${DEMO_PASSWORD}`);
+  console.log(`Administrador demo listo: ${admin.email}`);
 
   // 6. Staff (sin unidad)
   for (const staff of STAFF) {
     const created = await prisma.user.upsert({
       where: { email: staff.email },
-      update: { role: staff.role, unitId: null },
+      update: { passwordHash, role: staff.role, unitId: null },
       create: {
         email: staff.email,
         passwordHash,
@@ -178,7 +196,7 @@ async function main() {
         unitId: null,
       },
     });
-    console.log(`Usuario ${staff.role} listo: ${created.email} / ${DEMO_PASSWORD}`);
+    console.log(`Usuario ${staff.role} listo: ${created.email}`);
   }
 
   // 7. Paquetes demo
@@ -384,7 +402,7 @@ async function seedDelinquency(passwordHash: string) {
     const id = await unitId(resident.unit);
     const user = await prisma.user.upsert({
       where: { email: resident.email },
-      update: { unitId: id },
+      update: { passwordHash, unitId: id },
       create: { email: resident.email, passwordHash, role: Role.RESIDENTE, unitId: id },
     });
     residents.set(resident.unit, user.id);

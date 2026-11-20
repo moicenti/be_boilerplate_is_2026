@@ -5,6 +5,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle, hours } from '@nestjs/throttler';
 import { Public } from '@Auth/decorators';
 import { UsersService } from '@Users/services';
 import { CreateUserDto, UserResponseDto } from '@Users/dto';
@@ -19,6 +20,7 @@ export class UsersController {
    * colección `/users` y responde 201 (el default de Nest para POST).
    */
   @Public()
+  @Throttle({ default: { limit: 10, ttl: hours(1) } })
   @Post()
   @ApiOperation({ summary: 'Registra un nuevo usuario' })
   @ApiCreatedResponse({ type: UserResponseDto })

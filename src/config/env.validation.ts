@@ -18,6 +18,11 @@ export interface EnvConfig {
   APP_TIMEZONE: string;
   /** Espera de la pasarela de pago simulada (H1), en milisegundos. */
   PAGO_SIMULADO_ESPERA_MS: number;
+  /**
+   * Proxies delante de la app (Render = 1). Con 0 no se confía en
+   * X-Forwarded-For; mal configurado, el rate limit agrupa a todos en una IP.
+   */
+  TRUST_PROXY_HOPS: number;
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -109,5 +114,6 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
     APP_TIMEZONE: timezone,
     PAGO_SIMULADO_ESPERA_MS: readNonNegativeInt(raw, 'PAGO_SIMULADO_ESPERA_MS', 5000),
+    TRUST_PROXY_HOPS: readNonNegativeInt(raw, 'TRUST_PROXY_HOPS', 0),
   };
 }

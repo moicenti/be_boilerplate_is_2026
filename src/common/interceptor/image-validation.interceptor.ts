@@ -5,18 +5,31 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Observable, from } from 'rxjs';
+import { Observable, from, throwError } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { promises as fs } from 'node:fs';
-import { detectImageType, extensionFor } from '../utils/file-signature.js';
+import { FileTypeError } from '../errors/file-type.error.js';
+import {
+  detectFileType,
+  extensionFor,
+  mimeTypeFor,
+  type AllowedFileType,
+} from '../utils/file-signature.js';
+
+const removeAll = (files: Express.Multer.File[]) =>
+  Promise.allSettled(files.map((f) => fs.unlink(f.path)));
 
 /**
- * Valida que las imágenes subidas por Multer sean realmente JPG o PNG
- * leyendo sus magic bytes. Si alguna no lo es, borra TODOS los archivos
- * subidos y responde 400.
+ * Valida los archivos que Multer ya guardó en disco leyendo sus magic bytes,
+ * y les pone la extensión y el mimetype reales (los del cliente no se usan).
+ *
+ * Si alguno no es de un tipo permitido, borra TODOS y responde 400. También
+ * los borra si la request falla después (DTO inválido, error del handler),
+ * para no dejar archivos huérfanos servidos en /uploads.
  */
-@Injectable()
-export class ImageValidationInterceptor implements NestInterceptor {
+export class FileSignatureInterceptor implements NestInterceptor {
+  constructor(private readonly allowed: readonly AllowedFileType[]) {}
+
   async intercept(
     context: ExecutionContext,
     next: CallHandler,
@@ -30,10 +43,9 @@ export class ImageValidationInterceptor implements NestInterceptor {
     try {
       for (const file of files) {
         const buffer = await fs.readFile(file.path);
-        const type = detectImageType(buffer);
+        const type = detectFileType(buffer, this.allowed);
         const newExt = extensionFor(type);
-        const basePath = file.path.replace(/\.[^.]+$/, '');
-        const newPath = `${basePath}${newExt}`;
+        const newPath = `${file.path.replace(/\.[^./]+$/, '')}${newExt}`;
 
         if (file.path !== newPath) {
           await fs.rename(file.path, newPath);
@@ -41,23 +53,27 @@ export class ImageValidationInterceptor implements NestInterceptor {
           file.filename = `${file.filename.replace(/\.[^.]+$/, '')}${newExt}`;
         }
 
-        file.mimetype = type === 'jpeg' ? 'image/jpeg' : 'image/png';
+        file.mimetype = mimeTypeFor(type);
       }
     } catch (error) {
-      console.error('IMAGE VALIDATION ERROR:', error);
-
-      await Promise.allSettled(
-        files.map((f) => fs.unlink(f.path).catch(() => undefined)),
+      await removeAll(files);
+      throw new BadRequestException(
+        error instanceof FileTypeError ? error.message : 'Archivo inválido.',
       );
-
-      const message = error instanceof Error
-        ? error.message
-        : 'Archivo inválido.';
-
-      throw new BadRequestException(message);
     }
 
+    return next.handle().pipe(
+      catchError((error: unknown) =>
+        from(removeAll(files)).pipe(switchMap(() => throwError(() => error))),
+      ),
+    );
+  }
+}
 
-    return next.handle();
+/** Solo JPG o PNG (fotos de incidencias). */
+@Injectable()
+export class ImageValidationInterceptor extends FileSignatureInterceptor {
+  constructor() {
+    super(['jpeg', 'png']);
   }
 }

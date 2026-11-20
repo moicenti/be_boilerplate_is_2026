@@ -24,7 +24,7 @@
 
 ## Usuarios utilizados
 
-Contraseña de todos: `Demo1234!`
+Contraseña de todos: la de `SEED_DEMO_PASSWORD`
 
 | Rol | Correo |
 | --- | --- |
