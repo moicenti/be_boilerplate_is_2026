@@ -17,6 +17,7 @@ const UNITS = [
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const UNITS_REGISTERED_AT = new Date("2026-01-01T00:00:00-06:00");
 
 type DemoPackage = {
   unit: string;
@@ -115,8 +116,8 @@ async function main() {
   for (const unit of UNITS) {
     await prisma.unit.upsert({
       where: { code: unit.code },
-      update: {},
-      create: unit,
+      update: { createdAt: UNITS_REGISTERED_AT },
+      create: { ...unit, createdAt: UNITS_REGISTERED_AT },
     });
   }
   console.log(`Unidades listas: ${UNITS.length}`);
@@ -275,6 +276,36 @@ async function main() {
       },
     });
     console.log(`  ${folio} · ${demo.title}`);
+  }
+
+  // 8b. Votos demo en "Renovación de luminarias" (cerrada) para ver resultados y auditoría
+  const luminarias = await prisma.votingTopic.findFirst({
+    where: { assembly: { title: 'Renovación de luminarias' } },
+    include: { options: { orderBy: { position: 'asc' } } },
+  });
+  if (luminarias && (await prisma.participacionVotacion.count({ where: { temaId: luminarias.id } })) === 0) {
+    const voters = [
+      { email: DEMO_EMAIL, option: 0 },
+      { email: 'otro@example.com', option: 0 },
+    ];
+    for (const [index, voter] of voters.entries()) {
+      const resident = await prisma.user.findUnique({ where: { email: voter.email } });
+      if (!resident?.unitId) continue;
+      await prisma.$transaction([
+        prisma.participacionVotacion.create({
+          data: {
+            temaId: luminarias.id,
+            unidadId: resident.unitId,
+            residenteId: resident.id,
+            fecha: new Date(luminarias.opensAt.getTime() + (index + 1) * 45 * 60 * 1000),
+          },
+        }),
+        prisma.vote.create({
+          data: { topicId: luminarias.id, optionId: luminarias.options[voter.option].id },
+        }),
+      ]);
+    }
+    console.log('  Votos demo en "Renovación de luminarias": 2');
   }
 
   // 9. Cuotas y pagos demo (H1): en A-19 una pagada, una con pago parcial y una pendiente
