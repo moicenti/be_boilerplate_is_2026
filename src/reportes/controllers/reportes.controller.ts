@@ -1,11 +1,12 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../auth/decorators/roles.decorator.js'; // Ajusta la ruta si es necesario
+import { Role } from '@prisma/client';
+import { Roles } from '../../auth/decorators/roles.decorator.js';
 
-import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
-import { ResumenService } from './resumen.service.js';
-import type { ResumenResponse } from './resumen.service.js';
-import { SeccionesRepository } from './repositories/secciones.repository.js';
+import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
+import { ResumenService } from '../resumen.service.js';
+import type { ResumenResponse } from '../resumen.service.js';
+import { SeccionesRepository } from '../repositories/secciones.repository.js';
 
 @ApiTags('reportes')
 @ApiBearerAuth()
@@ -17,8 +18,7 @@ export class ReportesController {
   ) {}
 
   @Get('resumen')
-  // ✅ Usamos el string directo 'ADMINISTRADOR' en lugar de Role.ADMINISTRADOR
-  @Roles('ADMINISTRADOR')
+  @Roles(Role.ADMINISTRADOR)
   @ApiOperation({
     summary: 'H26: los 4 indicadores del panel en una sola consulta',
   })
@@ -29,7 +29,7 @@ export class ReportesController {
   }
 
   @Get('secciones')
-  @Roles('ADMINISTRADOR')
+  @Roles(Role.ADMINISTRADOR)
   @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
   listarSecciones() {
     return this.secciones.listar();
