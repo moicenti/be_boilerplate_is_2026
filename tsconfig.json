@@ -13,13 +13,29 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false,
     "types": ["vitest/globals", "node"],
-    "baseUrl": "./src",
+    // Alias por módulo. Cada entrada apunta al barrel (index.ts) de la carpeta,
+    // de modo que `@Auth/services` resuelve a `src/auth/services/index.ts`.
+    //
+    // Tres reglas que hay que respetar acá, o el alias deja de resolver:
+    //
+    // 1. Las rutas van con `./`. Un valor como "/src/auth/*" es una ruta
+    //    absoluta desde la raíz del filesystem, no desde el proyecto.
+    //
+    // 2. El comodín tiene que terminar en `/index.ts`. Con moduleResolution
+    //    "nodenext" TypeScript no resuelve un directorio a su index, así que
+    //    un mapeo a "./src/auth/*" falla con TS2307.
+    //
+    // 3. Cada módulo necesita además su entrada sin comodín (`@Auth`), porque
+    //    un patrón con `*` no matchea el alias pelado.
+    //
+    // No se usa `baseUrl` (deprecado en TypeScript 6): las rutas son relativas
+    // al propio tsconfig.
     "paths": {
       "@Auth": ["./src/auth/index.ts"],
       "@Auth/*": ["./src/auth/*/index.ts"],
@@ -29,17 +45,17 @@
       "@Health/*": ["./src/health/*/index.ts"],
       "@Prisma": ["./src/prisma/index.ts"],
       "@Prisma/*": ["./src/prisma/*/index.ts"],
-      "@PrismaClient": ["./src/generated/prisma/client.ts"],
-      "@Config": ["./src/config/index.ts"],
       "@Common/*": ["./src/common/*/index.ts"],
+      "@Config": ["./src/config/index.ts"],
       "@Unidades": ["./src/unidades/index.ts"],
       "@Unidades/*": ["./src/unidades/*/index.ts"],
       "@Paquetes": ["./src/paquetes/index.ts"],
       "@Paquetes/*": ["./src/paquetes/*/index.ts"],
       "@Asambleas": ["./src/asambleas/index.ts"],
       "@Asambleas/*": ["./src/asambleas/*/index.ts"],
-      "@Incidencias": ["./src/incidencias/index.ts"],
+      "@PrismaClient": ["./src/generated/prisma/client.ts"],
       "@Incidencias/*": ["./src/incidencias/*/index.ts"],
+      "@Incidencias": ["./src/incidencias/index.ts"],      
       "@CommonAreas": ["./src/common-areas/index.ts"],
       "@CommonAreas/*": ["./src/common-areas/*/index.ts"],
       "@Notificaciones": ["./src/notificaciones/index.ts"],
@@ -52,12 +68,12 @@
       "@Reservas/*": ["./src/reservas/*/index.ts"],
       "@Cuotas": ["./src/cuotas/index.ts"],
       "@Cuotas/*": ["./src/cuotas/*/index.ts"],
+      "@Pagos": ["./src/pagos/index.ts"],
+      "@Pagos/*": ["./src/pagos/*/index.ts"],
       "@Anuncio": ["./src/anuncio/index.ts"],
       "@Anuncio/*": ["./src/anuncio/*/index.ts"],
-      "@Pagos": ["./src/pagos/index.ts"],
-      "@Pagos/*": ["./src/pagos/*/index.ts"]
+      "@Directorio": ["./src/directorio/index.ts"],
+      "@Directorio/*": ["./src/directorio/*/index.ts"]
     }
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test"]
+  }
 }
