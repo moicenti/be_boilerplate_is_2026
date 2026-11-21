@@ -23,6 +23,7 @@ export class SeccionesRepository {
       porTorre.set(u.tower, grupo);
     }
 
+    // ✅ Formato exacto exigido por H30
     return [...porTorre.entries()].map(([torre, g], i) => ({
       id: i + 1,
       nombre: `Torre ${torre}`,
