@@ -23,6 +23,8 @@
     "paths": {
       "@Auth": ["./src/auth/index.ts"],
       "@Auth/*": ["./src/auth/*/index.ts"],
+      "@Users": ["./src/users/index.ts"],
+      "@Users/*": ["./src/users/*/index.ts"],
       "@Health": ["./src/health/index.ts"],
       "@Health/*": ["./src/health/*/index.ts"],
       "@Prisma": ["./src/prisma/index.ts"],
@@ -50,12 +52,10 @@
       "@Reservas/*": ["./src/reservas/*/index.ts"],
       "@Cuotas": ["./src/cuotas/index.ts"],
       "@Cuotas/*": ["./src/cuotas/*/index.ts"],
-      "@Pagos": ["./src/pagos/index.ts"],
-      "@Pagos/*": ["./src/pagos/*/index.ts"],
       "@Anuncio": ["./src/anuncio/index.ts"],
       "@Anuncio/*": ["./src/anuncio/*/index.ts"],
-      "@Directorio": ["./src/directorio/index.ts"],
-      "@Directorio/*": ["./src/directorio/*/index.ts"]
+      "@Pagos": ["./src/pagos/index.ts"],
+      "@Pagos/*": ["./src/pagos/*/index.ts"]
     }
   },
   "include": ["src/**/*"],
