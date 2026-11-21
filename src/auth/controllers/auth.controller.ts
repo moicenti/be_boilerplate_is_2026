@@ -7,6 +7,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { Throttle, minutes } from '@nestjs/throttler';
 import { AuthService } from '@Auth/services';
 import { CurrentUser, Public } from '@Auth/decorators';
 import { AuthResponseDto, LoginDto, RefreshTokenDto } from '@Auth/dto';
@@ -23,7 +24,9 @@ export class AuthController {
    * devuelve una representación de la sesión. Nest usa 201 por defecto en
    * POST, de ahí el @HttpCode explícito.
    */
+  // Frena fuerza bruta y el costo de CPU de bcrypt por IP.
   @Public()
+  @Throttle({ default: { limit: 20, ttl: minutes(1) } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Inicia sesión con usuario y contraseña' })
@@ -36,6 +39,7 @@ export class AuthController {
 
   /** Canjea el refresh token por un par nuevo. El token viejo queda revocado. */
   @Public()
+  @Throttle({ default: { limit: 30, ttl: minutes(1) } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Renueva el access token rotando el refresh token' })

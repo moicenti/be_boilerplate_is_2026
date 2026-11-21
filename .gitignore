@@ -65,3 +65,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # .gitignore
 /uploads/*
+
+# Salida de compilación: nunca va dentro de src/
+/src/**/*.js
+/src/**/*.js.map

@@ -22,7 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser, Roles } from '@Auth/decorators';
-import { AsambleasService } from '@Asambleas/services';
+import { AsambleasService, VotosService } from '@Asambleas/services';
 import {
   AssemblyPageResponseDto,
   AssemblyResponseDto,
@@ -37,7 +37,10 @@ import { Role, type User } from '@PrismaClient';
 @ApiBearerAuth()
 @Controller('asambleas')
 export class AsambleasController {
-  constructor(private readonly asambleasService: AsambleasService) {}
+  constructor(
+    private readonly asambleasService: AsambleasService,
+    private readonly votosService: VotosService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -53,10 +56,14 @@ export class AsambleasController {
   ): Promise<AssemblyPageResponseDto> {
     const page = await this.asambleasService.list(query, user);
     const now = this.asambleasService.now();
+    const unitVotes = await this.votosService.unitVotesFor(
+      user,
+      page.items.flatMap((assembly) => assembly.topics.map((t) => t.id)),
+    );
     return {
       ...page,
       items: page.items.map((assembly) =>
-        AssemblySummaryDto.fromEntity(assembly, now),
+        AssemblySummaryDto.fromEntity(assembly, now, unitVotes),
       ),
     };
   }
@@ -85,9 +92,14 @@ export class AsambleasController {
     @CurrentUser() user: User,
   ): Promise<AssemblyResponseDto> {
     const assembly = await this.asambleasService.findOne(id, user);
+    const unitVotes = await this.votosService.unitVotesFor(
+      user,
+      assembly.topics.map((t) => t.id),
+    );
     return AssemblyResponseDto.fromEntity(
       assembly,
       this.asambleasService.now(),
+      unitVotes,
     );
   }
 

@@ -25,31 +25,31 @@ describe('CentroNotificacionesService', () => {
     it('por defecto pide la página 1 con 20 elementos', async () => {
       const res = await service.listar(YO, {});
 
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20);
+      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20, {});
       expect(res).toEqual({ total: 42, page: 1, size: 20, items: [] });
     });
 
     it('calcula el desplazamiento de la página pedida', async () => {
       await service.listar(YO, { page: 3, size: 10 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 20, 10);
+      expect(repo.listar).toHaveBeenCalledWith('residente-1', 20, 10, {});
     });
 
     it('nunca devuelve más de 20 por página', async () => {
       const res = await service.listar(YO, { size: 500 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20);
+      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 20, {});
       expect(res.size).toBe(20);
     });
 
     it('corrige página y tamaño inválidos (0 o negativos)', async () => {
       const res = await service.listar(YO, { page: 0, size: -5 });
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 1);
+      expect(repo.listar).toHaveBeenCalledWith('residente-1', 0, 1, {});
       expect(res.page).toBe(1);
       expect(res.size).toBe(1);
     });
 
     it('acepta números que llegan como texto desde la URL', async () => {
       await service.listar(YO, { page: '2', size: '5' } as never);
-      expect(repo.listar).toHaveBeenCalledWith('residente-1', 5, 5);
+      expect(repo.listar).toHaveBeenCalledWith('residente-1', 5, 5, {});
     });
 
     it('usa solo el ID de la sesión', async () => {

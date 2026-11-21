@@ -39,6 +39,7 @@ export interface MyPackagePage {
   total: number;
   totalPages: number;
   pendingCount: number;
+  counts: { TODOS: number; PENDIENTE_RETIRO: number; ENTREGADO: number };
 }
 
 @Injectable()
@@ -132,17 +133,26 @@ export class PaquetesService {
       total: 0,
       totalPages: 1,
       pendingCount: 0,
+      counts: { TODOS: 0, PENDIENTE_RETIRO: 0, ENTREGADO: 0 },
     };
     if (!user.unitId) return empty;
 
-    const [{ items, total }, pendingCount] = await Promise.all([
+    // Lo recibido antes de que la unidad quedara vacía era de otros residentes.
+    const since =
+      (await this.unidadesService.findById(user.unitId))?.historyStartsAt ?? null;
+
+    const [{ items, total }, pendingCount, all, delivered] = await Promise.all([
       this.packageRepository.findPageForUnit(
         user.unitId,
         query.estado,
         (query.page - 1) * PAGE_SIZE,
         PAGE_SIZE,
+        query.q,
+        since,
       ),
-      this.packageRepository.countPendingForUnit(user.unitId),
+      this.packageRepository.countPendingForUnit(user.unitId, since),
+      this.packageRepository.countForUnit(user.unitId, undefined, since),
+      this.packageRepository.countForUnit(user.unitId, PackageStatus.ENTREGADO, since),
     ]);
 
     return {
@@ -151,6 +161,11 @@ export class PaquetesService {
       total,
       totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
       pendingCount,
+      counts: {
+        TODOS: all,
+        PENDIENTE_RETIRO: pendingCount,
+        ENTREGADO: delivered,
+      },
     };
   }
 
@@ -194,7 +209,12 @@ export class PaquetesService {
   }
 
   private belongsToUnitOf(pkg: PackageWithRelations, user: User): boolean {
-    return Boolean(user.unitId) && pkg.unitId === user.unitId;
+    const since = pkg.unit.historyStartsAt;
+    return (
+      Boolean(user.unitId) &&
+      pkg.unitId === user.unitId &&
+      (!since || pkg.receivedAt >= since)
+    );
   }
 
   private async findOrFail(id: string): Promise<PackageWithRelations> {

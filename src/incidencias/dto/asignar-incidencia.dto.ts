@@ -13,21 +13,36 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Priority } from '@PrismaClient';
 
 export class AsignarIncidenciaDto {
-  @ApiProperty({ enum: Priority, example: Priority.ALTA })
+  @ApiProperty({
+    enum: Priority,
+    example: Priority.ALTA,
+    description: 'Prioridad del reporte',
+  })
   @IsEnum(Priority, { message: 'Prioridad inválida' })
   priority: Priority;
 
-  @ApiProperty({ format: 'uuid' })
+  @ApiProperty({
+    format: 'uuid',
+    example: '3e459034-e612-49e9-a921-4b98069e96b2',
+    description: 'ID del administrador responsable',
+  })
   @IsUUID('4', { message: 'assigneeId debe ser un UUID válido' })
   assigneeId: string;
 
-  @ApiProperty({ format: 'date-time', example: '2026-11-20T18:00:00.000Z' })
+  @ApiProperty({
+    format: 'date-time',
+    example: '2026-11-20T18:00:00.000Z',
+    description: 'Fecha compromiso de resolución',
+  })
   @IsDateString({}, { message: 'dueDate debe ser una fecha válida (ISO 8601)' })
   dueDate: string;
 
   @ApiProperty({
     required: false,
+    example: 'Fuga activa en área común, riesgo eléctrico.',
     description: 'Obligatoria si priority = CRITICA (10-200 caracteres)',
+    minLength: 10,
+    maxLength: 200,
   })
   @ValidateIf((o) => o.priority === Priority.CRITICA)
   @IsString()

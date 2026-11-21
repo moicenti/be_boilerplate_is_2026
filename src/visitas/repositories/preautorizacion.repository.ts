@@ -46,4 +46,30 @@ export class PreautorizacionRepository {
       where: { codigo },
     });
   }
+
+  async findById(id: string) {
+  return this.prisma.preAutorizacion.findUnique({ where: { id } });
+}
+
+async markAsUsada(id: string) {
+  return this.prisma.preAutorizacion.update({
+    where: { id },
+    data: { estado: 'USADA' },
+  });
+}
+
+async buscar(query: string) {
+  return this.prisma.preAutorizacion.findMany({
+    where: {
+      estado: 'VIGENTE',
+      OR: [
+        { codigo: query.toUpperCase() },
+        { documento: query },
+        { nombreVisitante: { contains: query, mode: 'insensitive' } },
+      ],
+    },
+    take: 20,
+  });
+}
+
 }

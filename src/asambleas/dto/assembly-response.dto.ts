@@ -44,7 +44,17 @@ class VotingTopicResponseDto {
 
   @ApiProperty({ type: [VotingOptionResponseDto] })
   options!: VotingOptionResponseDto[];
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: { votedAt: '2026-11-05T02:10:00.000Z' },
+    description:
+      'Solo para residentes con unidad: cuándo votó su unidad. Nunca incluye la opción elegida.',
+  })
+  unitVote!: { votedAt: Date } | null;
 }
+
+export type UnitVotes = Map<string, Date>;
 
 class AgendaItemResponseDto {
   @ApiProperty({ format: 'uuid' })
@@ -103,21 +113,40 @@ export class AssemblySummaryDto {
   @ApiProperty({ example: 3 })
   agendaCount!: number;
 
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    example: 1,
+    description:
+      'Solo para residentes con unidad: votaciones abiertas en las que su unidad aún no votó.',
+  })
+  pendingVotesForUnit!: number | null;
+
   static fromEntity(
     assembly: AssemblyWithRelations,
     now: Date,
+    unitVotes: UnitVotes | null = null,
   ): AssemblySummaryDto {
-    return summaryFields(assembly, now);
+    return summaryFields(assembly, now, unitVotes);
   }
 }
 
 function summaryFields(
   assembly: AssemblyWithRelations,
   now: Date,
+  unitVotes: UnitVotes | null,
 ): Pick<AssemblySummaryDto, keyof AssemblySummaryDto> {
   const opens = assembly.topics.map((t) => t.opensAt.getTime());
   const closes = assembly.topics.map((t) => t.closesAt.getTime());
+  const published = assembly.publishedAt !== null;
   return {
+    pendingVotesForUnit: unitVotes
+      ? assembly.topics.filter(
+          (t) =>
+            topicStatus(t, published, now) === AssemblyStatus.ABIERTA &&
+            !unitVotes.has(t.id),
+        ).length
+      : null,
     id: assembly.id,
     folio: assembly.folio,
     title: assembly.title,
@@ -154,10 +183,11 @@ export class AssemblyResponseDto extends AssemblySummaryDto {
   static fromEntity(
     assembly: AssemblyWithRelations,
     now: Date,
+    unitVotes: UnitVotes | null = null,
   ): AssemblyResponseDto {
     const published = assembly.publishedAt !== null;
     return {
-      ...summaryFields(assembly, now),
+      ...summaryFields(assembly, now, unitVotes),
       description: assembly.description,
       createdBy: { id: assembly.createdBy.id, email: assembly.createdBy.email },
       createdAt: assembly.createdAt,
@@ -180,6 +210,9 @@ export class AssemblyResponseDto extends AssemblySummaryDto {
           text: option.text,
           position: option.position,
         })),
+        unitVote: unitVotes?.has(topic.id)
+          ? { votedAt: unitVotes.get(topic.id)! }
+          : null,
       })),
     };
   }

@@ -17,11 +17,21 @@ export class CentroNotificacionesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /** De la más reciente a la más antigua. `id` desempata para que la paginación sea estable. */
-  async listar(residenteId: string, skip: number, take: number) {
+  async listar(
+    residenteId: string,
+    skip: number,
+    take: number,
+    filtros: { modulo?: string; leidas?: boolean } = {},
+  ) {
+    const where = {
+      residenteId,
+      ...(filtros.modulo !== undefined && { moduloOrigen: filtros.modulo }),
+      ...(filtros.leidas !== undefined && { leida: filtros.leidas }),
+    };
     const [total, items] = await this.prisma.$transaction([
-      this.prisma.notificacion.count({ where: { residenteId } }),
+      this.prisma.notificacion.count({ where }),
       this.prisma.notificacion.findMany({
-        where: { residenteId },
+        where,
         orderBy: [{ fechaCreacion: 'desc' }, { id: 'desc' }],
         skip,
         take,

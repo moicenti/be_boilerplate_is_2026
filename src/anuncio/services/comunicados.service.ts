@@ -83,7 +83,7 @@ export class ComunicadosService {
       user.id,
       user.unitId,
     );
-    const lista = await this.comunicadosRepository.obtenerMuroResidente(user.id, ubicacion);
+    const lista = await this.comunicadosRepository.obtenerMuroResidente(user.id, ubicacion, user.role === 'ADMINISTRADOR');
 
     return lista.map(({ lecturas, ...comunicado }) => ({
       ...comunicado,

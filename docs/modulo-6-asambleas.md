@@ -1,6 +1,6 @@
 # Módulo 6: Asambleas y votaciones digitales
 
-Responsable: Cristian Rodríguez · Historia implementada: **H16. Convocar una asamblea con temas a votar**.
+Responsable: Cristian Rodríguez · Historias implementadas: **H16. Convocar una asamblea con temas a votar**, **H17. Votar una sola vez por unidad** (sección 11) y **H18. Ver resultados claros y auditables** (sección 12).
 
 Este documento describe el modelo de datos, los endpoints, los flujos, el frontend y las decisiones de arquitectura del módulo, con su justificación.
 
@@ -294,7 +294,7 @@ Al cerrar H16 pasaban 105 pruebas unitarias y 52 de integración del proyecto.
 
 ## 9. Datos de prueba
 
-`npm run db:seed` crea, si no existen, cinco asambleas con fechas relativas al momento de correrlo, convocadas por `admin@example.com` (contraseña `Demo1234!`):
+`npm run db:seed` crea, si no existen, cinco asambleas con fechas relativas al momento de correrlo, convocadas por `admin@example.com` (contraseña la de `SEED_DEMO_PASSWORD`):
 
 | Asamblea | Estado al correr el seed |
 | --- | --- |
@@ -309,7 +309,171 @@ Al cerrar H16 pasaban 105 pruebas unitarias y 52 de integración del proyecto.
 | Tema | Detalle |
 | --- | --- |
 | Documento de apoyo (PDF) | Está en el diseño pero no en las tasks; se dejó para el final si hay tiempo. Reutilizaría la subida de archivos de incidencias |
-| Pantallas del residente | Lista, detalle y voto son de H17 |
-| Resultados y auditoría | "Ver resultados" y la tarjeta de participación del diseño son de H18 |
+| Librería de PDF del Módulo 10 | BE-33.1 no estaba disponible; el PDF se genera con `pdfkit` detrás de `AuditDocumentRenderer` (ver 12) |
 | Notificar cambios | Editar una propuesta programada no envía un aviso nuevo a los residentes |
 | Destinatario "todos" | Si el Módulo 9 agrega ese tipo, `notifyCommunity` puede hacer una sola llamada en lugar de una por torre |
+
+## 11. H17. Votar una sola vez por unidad
+
+| Task | Descripción | Estado |
+| --- | --- | --- |
+| DB-17.1 | `votos` (la participación usa `participacion_votacion` de DB-29.1) | Hecha |
+| BE-17.1 | `POST /api/v1/temas/{temaId}/votos` | Hecha |
+| BE-17.2 | "Tu unidad ya votó" en el detalle y el listado | Hecha |
+| BE-17.3 | Pruebas de integración | Hecha |
+| FE-17.1 | Asambleas del residente: lista y detalle | Hecha |
+| FE-17.2 | Flujo de voto con confirmación | Hecha |
+| QA-17.1 | Pruebas de aceptación | Ver [QA-17.1](qa/QA-17.1.md) |
+
+### Modelo: voto secreto pero auditable
+
+```mermaid
+erDiagram
+    temas_votacion ||--o{ participacion_votacion : "registra quién votó"
+    units ||--o{ participacion_votacion : "una por tema"
+    users ||--o{ participacion_votacion : "residente que votó"
+    temas_votacion ||--o{ votos : "recibe"
+    opciones_votacion ||--o{ votos : "elegida"
+
+    participacion_votacion {
+        uuid id PK
+        uuid tema_id FK
+        uuid unidad_id FK
+        uuid residente_id FK
+        timestamptz fecha
+    }
+
+    votos {
+        uuid id PK
+        uuid topic_id FK
+        uuid option_id FK
+    }
+```
+
+Corresponde a la decisión 5 del análisis:
+- **`participacion_votacion`** dice **quién** votó y cuándo. La creó DB-29.1 (reporte de participación, Módulo 10) y el voto escribe en ella, así el reporte y la auditoría leen la misma fuente. Su restricción `UNIQUE (tema_id, unidad_id)` garantiza un voto por unidad aunque lleguen dos solicitudes al mismo tiempo, y es la base de la auditoría (H18).
+- **`votos`** dice **qué** se votó, **sin unidad y sin fecha**. Si el voto guardara la hora, se podría cruzar con la hora de la participación y deducir qué eligió cada unidad.
+- Las dos inserciones van en **una sola transacción**. Invariante verificable: la cantidad de votos de un tema es igual a la de participaciones.
+- `votos` usa llaves foráneas con `RESTRICT`: un voto no desaparece al borrar su tema u opción.
+
+Migración: `20261120120000_db_17_1_votos` (solo `votos`; `participacion_votacion` viene de `20261120042920_db_29_1_vw_participacion_votaciones`).
+
+### `POST /api/v1/temas/{temaId}/votos`
+
+Cuerpo: `{ "opcionId": "uuid" }`. Solo residentes.
+
+| Código | Cuándo |
+| --- | --- |
+| 201 | Voto registrado. Responde `topicId`, `votedAt` y un mensaje; nunca la opción |
+| 400 | La opción no pertenece al tema |
+| 403 | El usuario no es residente o no tiene unidad (administración, seguridad) |
+| 404 | El tema no existe o es de un borrador |
+| 409 | "Tu unidad ya votó en este tema." |
+| 422 | "La votación no está abierta: abre el …" o "… cerró el …" |
+
+No existen rutas `PUT` ni `DELETE` de votos: un voto no se cambia ni se elimina.
+
+`GET /asambleas/{id}` agrega en cada tema `unitVote` (`{ votedAt }` si la unidad del residente ya votó, sin la opción) y `GET /asambleas` agrega `pendingVotesForUnit` (votaciones abiertas en las que la unidad aún no vota). Para quien no es residente con unidad, ambos valen `null`.
+
+### Flujo del voto
+
+```mermaid
+flowchart TD
+    A[Residente elige una opción] --> B[Revisar mi voto: diálogo de confirmación]
+    B --> C[POST /temas/id/votos]
+    C --> D{¿Residente con unidad?}
+    D -- No --> E[403]
+    D -- Sí --> F{¿Votación abierta?}
+    F -- No --> G[422 La votación no está abierta]
+    F -- Sí --> H{¿La opción es del tema?}
+    H -- No --> I[400]
+    H -- Sí --> J[(Transacción: comprueba que siga abierta, crea la participación y el voto)]
+    J --> K{¿La unidad ya tenía participación?}
+    K -- Sí: UNIQUE --> L[409 Tu unidad ya votó en este tema]
+    K -- No --> M[201: todos los residentes de la unidad ven Tu unidad ya votó]
+```
+
+### Frontend
+
+| Ruta | Task | Contenido |
+| --- | --- | --- |
+| `/asambleas` | FE-17.1 | Listado de asambleas publicadas con aviso de votación pendiente para la unidad, pestañas Todas / Abiertas / Próximas / Cerradas y búsqueda |
+| `/asambleas/{id}` | FE-17.1 y FE-17.2 | Convocatoria, agenda, propuesta, plazo y "Tu voto": opciones, diálogo de confirmación, botón deshabilitado durante el envío, mensajes de 409 y 422 y "Tu unidad ya votó" |
+
+`/asambleas/{id}` es el destino del enlace del aviso de convocatoria (H16). Administración y Seguridad pueden consultar las asambleas, pero **no ven la opción de votar**.
+
+### Decisiones
+
+- **La unicidad la garantiza la base, no el código.** Revisar primero si la unidad ya votó y después insertar tiene una carrera entre la lectura y la escritura. Con `UNIQUE (tema, unidad)`, dos solicitudes simultáneas no pueden crear dos participaciones; la segunda recibe 409. Hay una prueba que lo comprueba en paralelo.
+- **La transacción vuelve a comprobar el plazo**, así un voto que llega en el instante del cierre se rechaza aunque la validación previa lo haya dejado pasar.
+- **"Tu unidad ya votó" sin la opción.** Ni siquiera a la propia unidad se le muestra qué eligió: la base no puede relacionar el voto con la unidad.
+
+### Pruebas
+
+| Tipo | Archivo | Qué cubre |
+| --- | --- | --- |
+| Unitarias | `src/asambleas/services/votos.service.spec.ts` | Voto válido, 403 para administración y residente sin unidad, 422 programada y cerrada, 400 opción ajena, 404 tema inexistente o borrador, 409 y cierre durante la transacción |
+| Integración | `test/votos.e2e-spec.ts` | Voto válido visible para toda la unidad, segundo voto (409), solicitudes simultáneas, fuera del periodo (422), opción de otro tema (400), sin unidad (403), borrador (404), sin rutas PUT ni DELETE, tabla `votos` sin unidad y votos igual a participaciones |
+
+Al cerrar H17 pasaban 283 pruebas unitarias y 98 de integración del proyecto.
+
+## 12. H18. Ver resultados claros y auditables
+
+| Task | Descripción | Estado |
+| --- | --- | --- |
+| BE-18.1 | `GET /api/v1/temas/{temaId}/resultados` | Hecha |
+| BE-18.2 | `GET /api/v1/temas/{temaId}/auditoria` | Hecha |
+| BE-18.3 | `GET /api/v1/temas/{temaId}/auditoria/pdf` | Hecha |
+| BE-18.4 | Pruebas de integración | Hecha |
+| FE-18.1 | Pantalla de resultados | Hecha |
+| FE-18.2 | Auditoría con "Exportar PDF" | Hecha |
+| QA-18.1 | Pruebas de aceptación | Ver [QA-18.1](qa/QA-18.1.md) |
+
+### Endpoints (solo Administración; 403 para los demás roles)
+
+| Ruta | Votación programada o abierta | Votación cerrada |
+| --- | --- | --- |
+| `GET /temas/{id}/resultados` | Solo `unitsVoted` (cuántas unidades han votado); `results: null` | Votos y porcentaje por opción (2 decimales), `totalVotes`, `eligibleUnits`, `unitsVoted`, `participation`, `outcome` (`GANADOR`, `EMPATE` o `SIN_VOTOS`), `winner`, `tiedOptions` y `consistent` |
+| `GET /temas/{id}/auditoria` | 409 | Unidades que votaron con fecha y hora del voto (sin la opción), apertura, cierre, resultados y eventos del proceso |
+| `GET /temas/{id}/auditoria/pdf` | 409 | PDF `auditoria-{folio}-propuesta-{n}.pdf` con resultados, participación por unidad y eventos |
+
+### Cálculo (`src/asambleas/domain/results.ts`)
+
+- **Porcentaje por opción** = votos de la opción / total de votos, redondeado a 2 decimales.
+- **Unidades habilitadas** = unidades registradas al momento de la apertura del tema (`units.created_at <= opens_at`); es la decisión 6 del análisis. El reporte de participación del Módulo 10 (H29) cuenta en cambio las unidades activas al momento de consultarlo, por eso sus totales pueden diferir de los de esta pantalla.
+- **Participación** = unidades que votaron / unidades habilitadas.
+- **Ganador** = la opción con más votos; si dos o más comparten el máximo, **Empate**; sin votos, ninguno.
+- **`consistent`** verifica el invariante del criterio: la suma de votos de todas las opciones es igual al número de unidades que votaron. La pantalla y el PDF lo muestran.
+
+### Auditoría
+
+Se combinan los dos enfoques:
+- **Lo que pide el criterio:** la tabla de **participación por unidad**, con unidad y fecha y hora del voto.
+- **Lo que muestra el diseño:** los **eventos del proceso** (convocatoria publicada, votación abierta con el padrón fijado, votación cerrada y recuento consolidado).
+
+En ningún caso aparece la opción elegida: la tabla `votos` no tiene la unidad, así que la base no puede relacionarlas.
+
+### PDF detrás de una interfaz
+
+La task pedía reutilizar la librería de documentos de BE-33.1 (Módulo 10), que no estaba disponible al implementar H18. El PDF se genera con `pdfkit` en `AuditPdfService`, registrado como implementación de la clase abstracta `AuditDocumentRenderer`. Si el Módulo 10 publica su librería, basta con registrar otra implementación en `asambleas.module.ts`; el controlador y el servicio no cambian.
+
+### Frontend
+
+`/admin/asambleas/{id}/resultados` sigue el diseño de Jira:
+- participación final;
+- recuento agregado por opción con barras;
+- total emitido con la suma visible ("a + b + c = total") y la verificación;
+- ganador o empate;
+- tabla de eventos y de participación por unidad;
+- "Exportar PDF", deshabilitado durante la descarga y con error y reintento.
+
+Con la votación abierta solo se ve cuántas unidades han votado. Se llega desde "Ver resultados" en el listado, la tarjeta "Última votación cerrada" y el detalle de la convocatoria.
+
+### Pruebas
+
+| Tipo | Archivo | Qué cubre |
+| --- | --- | --- |
+| Unitarias | `src/asambleas/domain/results.spec.ts` | Porcentajes con 2 decimales, participación, ganador, empate, sin votos y verificación de la suma |
+| Integración | `test/resultados.e2e-spec.ts` | Resultados de un tema cerrado (con unidades registradas después de abrir que no cuentan), ganador, suma de votos igual a participaciones, resultados ocultos con la votación abierta, auditoría sin la opción y con eventos, 409 antes del cierre, PDF y control de roles |
+
+Al cerrar H18 pasaban 288 pruebas unitarias y 106 de integración del proyecto.

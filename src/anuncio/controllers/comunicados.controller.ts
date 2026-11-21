@@ -19,11 +19,12 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import type { Request } from 'express';
-import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { Role } from '@PrismaClient';
 import { ComunicadosService } from '../services/index.js';
 import { CrearComunicadoDto } from '../dto/index.js';
-import { CurrentUser } from '../../auth/decorators/index.js';
+import { CurrentUser, Roles } from '../../auth/decorators/index.js';
+import { FileSignatureInterceptor } from '../../common/interceptor/image-validation.interceptor.js';
 
 const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -58,7 +59,9 @@ export class ComunicadosController {
   }
 
   // H19 (BE-19.1): Publicar comunicado oficial
+  // El rol se valida con el guard, que corre ANTES de que Multer escriba en disco.
   @Post()
+  @Roles(Role.ADMINISTRADOR)
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
     FilesInterceptor('archivos', 2, {
@@ -79,17 +82,18 @@ export class ComunicadosController {
         callback(null, true);
       },
       storage: diskStorage({
-        destination: './public/uploads/anuncios',
+        destination: './uploads/anuncios',
+        // Extensión temporal: FileSignatureInterceptor pone la real según el contenido.
         filename: (
           _req: Request,
-          file: Express.Multer.File,
+          _file: Express.Multer.File,
           cb: (error: Error | null, filename: string) => void,
         ) => {
-          const extension = extname(file.originalname);
-          cb(null, `${randomUUID()}${extension}`);
+          cb(null, `${randomUUID()}.upload`);
         },
       }),
     }),
+    new FileSignatureInterceptor(['pdf', 'jpeg', 'png']),
   )
   async crear(
     @CurrentUser() user: any,
@@ -115,11 +119,23 @@ export class ComunicadosController {
     return this.comunicadosService.publicarComunicado(user.id, dto, files || []);
   }
 
-  // H19 (Criterio 4): Inmutabilidad oficial
+  // H19 (Criterio 4): Inmutabilidad oficial (métodos separados para evitar sobrescritura de metadata en NestJS)
   @Put(':id')
+  bloquearPut() {
+    throw new MethodNotAllowedException(
+      'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
+    );
+  }
+
   @Patch(':id')
+  bloquearPatch() {
+    throw new MethodNotAllowedException(
+      'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
+    );
+  }
+
   @Delete(':id')
-  bloquearEdicion() {
+  bloquearDelete() {
     throw new MethodNotAllowedException(
       'Los comunicados publicados son inmutables para preservar la integridad del historial oficial.',
     );

@@ -98,10 +98,27 @@ export class PackageRepository {
     status: PackageStatus | undefined,
     skip: number,
     take: number,
+    search?: string,
+    since?: Date | null,
   ): Promise<{ items: PackageWithRelations[]; total: number }> {
     const where: Prisma.PackageWhereInput = {
-      unitId,
+      ...this.unitScope(unitId, since),
       ...(status ? { status } : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                folio: { contains: search, mode: Prisma.QueryMode.insensitive },
+              },
+              {
+                carrier: {
+                  contains: search,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     const [items, total] = await this.prisma.$transaction([
@@ -117,13 +134,28 @@ export class PackageRepository {
     return { items, total };
   }
 
-  countPendingForUnit(unitId: string): Promise<number> {
+  countForUnit(
+    unitId: string,
+    status?: PackageStatus,
+    since?: Date | null,
+  ): Promise<number> {
+    return this.prisma.package.count({
+      where: { ...this.unitScope(unitId, since), ...(status ? { status } : {}) },
+    });
+  }
+
+  countPendingForUnit(unitId: string, since?: Date | null): Promise<number> {
     return this.prisma.package.count({
       where: {
-        unitId,
+        ...this.unitScope(unitId, since),
         status: PackageStatus.PENDIENTE_RETIRO,
       },
     });
+  }
+
+  /** Paquetes de la unidad desde que empezó su historial actual (ver Unit.historyStartsAt). */
+  private unitScope(unitId: string, since?: Date | null): Prisma.PackageWhereInput {
+    return { unitId, ...(since ? { receivedAt: { gte: since } } : {}) };
   }
 
   async pendingSummary(): Promise<PendingSummary> {
@@ -146,6 +178,30 @@ export class PackageRepository {
       orderBy: { carrier: 'asc' },
     });
     return rows.map((row) => row.carrier);
+  }
+
+  findDueForReminder(receivedBefore: Date): Promise<PackageWithRelations[]> {
+    return this.prisma.package.findMany({
+      where: {
+        status: PackageStatus.PENDIENTE_RETIRO,
+        receivedAt: { lte: receivedBefore },
+        reminderSentAt: null,
+      },
+      include: packageInclude,
+      orderBy: { receivedAt: 'asc' },
+    });
+  }
+
+  async markReminderSentIfPending(id: string, sentAt: Date): Promise<boolean> {
+    const { count } = await this.prisma.package.updateMany({
+      where: {
+        id,
+        status: PackageStatus.PENDIENTE_RETIRO,
+        reminderSentAt: null,
+      },
+      data: { reminderSentAt: sentAt },
+    });
+    return count === 1;
   }
 
   async markDeliveredIfPending(

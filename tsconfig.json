@@ -50,8 +50,12 @@
       "@Reservas/*": ["./src/reservas/*/index.ts"],
       "@Cuotas": ["./src/cuotas/index.ts"],
       "@Cuotas/*": ["./src/cuotas/*/index.ts"],
+      "@Pagos": ["./src/pagos/index.ts"],
+      "@Pagos/*": ["./src/pagos/*/index.ts"],
       "@Anuncio": ["./src/anuncio/index.ts"],
-      "@Anuncio/*": ["./src/anuncio/*/index.ts"]
+      "@Anuncio/*": ["./src/anuncio/*/index.ts"],
+      "@Directorio": ["./src/directorio/index.ts"],
+      "@Directorio/*": ["./src/directorio/*/index.ts"]
     }
   },
   "include": ["src/**/*"],

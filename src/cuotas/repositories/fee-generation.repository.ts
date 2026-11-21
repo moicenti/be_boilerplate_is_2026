@@ -27,6 +27,14 @@ export interface ScopeUnit {
   hasResident: boolean;
 }
 
+export type RunErrorWithUnit = Prisma.GenerationErrorGetPayload<{
+  include: { unit: { select: { code: true } } };
+}>;
+
+export type RunWithUser = Prisma.GenerationRunGetPayload<{
+  include: { user: { select: { email: true } } };
+}>;
+
 export interface FeeToInsert {
   unitId: string;
   amount: Prisma.Decimal;
@@ -153,29 +161,68 @@ export class FeeGenerationRepository {
     }));
   }
 
+  /** Unidades que ya tienen la cuota de la regla en el periodo. */
+  async findGeneratedUnitIds(
+    ruleId: number,
+    period: string,
+  ): Promise<Set<string>> {
+    const fees = await this.prisma.fee.findMany({
+      where: { ruleId, period },
+      select: { unitId: true },
+    });
+    return new Set(fees.map((f) => f.unitId));
+  }
+
+  findRunErrors(runId: number): Promise<RunErrorWithUnit[]> {
+    return this.prisma.generationError.findMany({
+      where: { runId },
+      include: { unit: { select: { code: true } } },
+      orderBy: { unit: { code: 'asc' } },
+    });
+  }
+
+  /** Ejecuciones de la regla, de la más reciente a la más antigua. */
+  async findRunsPage(
+    ruleId: number,
+    skip: number,
+    take: number,
+  ): Promise<{ total: number; items: RunWithUser[] }> {
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.generationRun.count({ where: { ruleId } }),
+      this.prisma.generationRun.findMany({
+        where: { ruleId },
+        include: { user: { select: { email: true } } },
+        orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take,
+      }),
+    ]);
+    return { total, items };
+  }
+
   /**
    * Un lote en una sola transacción. ON CONFLICT DO NOTHING sobre (unidad, regla, periodo):
-   * las cuotas que ya existían no se insertan y cuentan como omitidas.
+   * las cuotas que ya existían no se insertan y cuentan como omitidas. Devuelve la suma de
+   * los montos de las cuotas creadas.
    */
-  async saveBatch(input: BatchInput): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const created =
+  async saveBatch(input: BatchInput): Promise<Prisma.Decimal> {
+    return this.prisma.$transaction(async (tx) => {
+      const inserted =
         input.fees.length === 0
-          ? 0
-          : (
-              await tx.fee.createManyAndReturn({
-                data: input.fees.map((fee) => ({
-                  unitId: fee.unitId,
-                  ruleId: input.ruleId,
-                  concept: input.concept,
-                  period: input.period,
-                  amount: fee.amount,
-                  dueDate: input.dueDate,
-                })),
-                skipDuplicates: true,
-                select: { id: true },
-              })
-            ).length;
+          ? []
+          : await tx.fee.createManyAndReturn({
+              data: input.fees.map((fee) => ({
+                unitId: fee.unitId,
+                ruleId: input.ruleId,
+                concept: input.concept,
+                period: input.period,
+                amount: fee.amount,
+                dueDate: input.dueDate,
+              })),
+              skipDuplicates: true,
+              select: { amount: true },
+            });
+      const created = inserted.length;
 
       if (input.errors.length > 0) {
         await tx.generationError.createMany({
@@ -195,6 +242,10 @@ export class FeeGenerationRepository {
           failed: { increment: input.errors.length },
         },
       });
+      return inserted.reduce(
+        (sum, fee) => sum.add(fee.amount),
+        new Prisma.Decimal(0),
+      );
     });
   }
 

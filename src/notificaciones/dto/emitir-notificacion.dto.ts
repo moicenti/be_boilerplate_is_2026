@@ -1,8 +1,10 @@
+// El catálogo de módulos vive en un solo lugar (H23/H25).
+import type { ModuloNotificacion } from './modulos-notificacion.js';
+
 export type TipoDestinatario = 'RESIDENTE' | 'UNIDAD' | 'GRUPO';
 
 export interface DestinatarioDto {
   tipo: TipoDestinatario;
-  /** residente: uuid del usuario · unidad: uuid de la unidad · grupo: nombre de la torre */
   id: string;
 }
 
@@ -11,12 +13,11 @@ export interface EmitirNotificacionDto {
   tipo: string;
   titulo?: string;
   mensaje: string;
-  moduloOrigen: string;
+  moduloOrigen: ModuloNotificacion; // <-- Cambiado a tipo estricto
   enlaceAccion?: string;
   forzada?: boolean;
 }
 
-/** Quién emite. Sale de la sesión del módulo que llama, nunca del cuerpo de una petición. */
 export interface Emisor {
   id: string;
   rol: string;

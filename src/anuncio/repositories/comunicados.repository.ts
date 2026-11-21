@@ -68,6 +68,7 @@ export class ComunicadosRepository {
   async obtenerMuroResidente(
     residenteId: string,
     ubicacion?: { tower: string; code: string; description: string } | null,
+    esAdmin = false,
   ) {
     const condicionesAudiencia: any[] = [
       { audienciaTipo: 'TODO_EL_CONDOMINIO' },
@@ -91,7 +92,7 @@ export class ComunicadosRepository {
     }
 
     return this.prisma.comunicadoOficial.findMany({
-      where: {
+      where: esAdmin ? {} : {
         OR: condicionesAudiencia,
       },
       orderBy: {
