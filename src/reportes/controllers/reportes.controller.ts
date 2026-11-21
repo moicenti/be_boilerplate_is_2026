@@ -1,37 +1,46 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
-import { Roles } from '../../auth/decorators/roles.decorator.js';
-
-import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
-import { ResumenService } from '../resumen.service.js';
-import type { ResumenResponse } from '../resumen.service.js';
-import { SeccionesRepository } from '../repositories/secciones.repository.js';
+import { Roles } from '@Auth/decorators';
+import { Role } from '@PrismaClient';
+import { ResumenQueryDto } from '@Reportes/dto';
+import {
+  ReporteIncidenciasService,
+  ReporteParticipacionService,
+  ResumenService,
+} from '@Reportes/services';
 
 @ApiTags('reportes')
 @ApiBearerAuth()
+@Roles(Role.ADMINISTRADOR)
 @Controller('reportes')
 export class ReportesController {
   constructor(
     private readonly resumen: ResumenService,
-    private readonly secciones: SeccionesRepository,
+    private readonly reporteIncidencias: ReporteIncidenciasService,
+    private readonly reporteParticipacion: ReporteParticipacionService,
   ) {}
 
   @Get('resumen')
-  @Roles(Role.ADMINISTRADOR)
   @ApiOperation({
-    summary: 'H26: los 4 indicadores del panel en una sola consulta',
+    summary: 'Los 4 indicadores del panel (morosidad, ocupación, incidencias abiertas y participación)',
   })
-  obtenerResumen(
-    @Query() filtros: FiltrosReportesDto,
-  ): Promise<ResumenResponse> {
-    return this.resumen.obtenerResumen(filtros);
+  obtener(@Query() query: ResumenQueryDto) {
+    return this.resumen.obtener(query);
   }
 
-  @Get('secciones')
-  @Roles(Role.ADMINISTRADOR)
-  @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
-  listarSecciones() {
-    return this.secciones.listar();
+  @Get('incidencias')
+  @ApiOperation({
+    summary: 'H28: Reporte de incidencias abiertas agrupado por estado y prioridad',
+  })
+  obtenerIncidencias(@Query() query: ResumenQueryDto) {
+    return this.reporteIncidencias.obtenerReporte(query);
+  }
+
+  @Get('votaciones')
+  @ApiOperation({
+    summary: 'H29: Reporte de participación en votaciones cerradas (sin sentido del voto)',
+  })
+  obtenerVotaciones(@Query() query: ResumenQueryDto) {
+    return this.reporteParticipacion.obtenerReporte(query);
   }
 }
