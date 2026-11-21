@@ -10,9 +10,15 @@ import {
   ReporteParticipacionService,
   ResumenService,
 } from '@Reportes/services';
+import {
+  ExportacionController,
+  ReporteExportacionService,
+  ReportePdfRenderer,
+  ReportePdfService,
+} from './exportacion/index.js';
 
 @Module({
-  controllers: [ReportesController],
+  controllers: [ReportesController, ExportacionController],
   providers: [
     ResumenService,
     SeccionesRepository,
@@ -22,6 +28,8 @@ import {
     ParticipacionIndicador,
     ReporteIncidenciasService,
     ReporteParticipacionService,
+    ReporteExportacionService,
+    { provide: ReportePdfRenderer, useClass: ReportePdfService },
   ],
 })
 export class ReportesModule {}
