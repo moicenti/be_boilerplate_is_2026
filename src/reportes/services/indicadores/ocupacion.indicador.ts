@@ -1,47 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '@Prisma'; // ✅ Alias correcto según tu tsconfig
-import { FiltrosReportesDto } from '../../dto/filtros-reportes.dto.js';
-import { SeccionesRepository } from '../../repositories/secciones.repository.js';
+import { Injectable } from '@nestjs/common';
+import type { FiltrosResumen, IndicadorResumen } from '@Reportes/dto';
+import { FuenteNoDisponibleError } from './fuente-no-disponible.error.js';
 
-// ✅ La palabra 'export' es OBLIGATORIA aquí
-export interface OcupacionValor {
-  porcentaje: number;
-}
-
+/**
+ * Ocupación = horas de reservas CONFIRMADAS ÷ horas de uso permitido del área en el periodo × 100,
+ * sin contar bloqueos. Debe dar el mismo valor que el reporte de H27 (vw_ocupacion_areas).
+ *
+ * PENDIENTE: leer de vw_ocupacion_areas cuando H27 la entregue. Las tablas base (reserva,
+ * horario_area, bloqueo_area) existen, pero esta cifra tiene que coincidir con la de H27,
+ * así que no se recalcula aparte.
+ */
 @Injectable()
-export class OcupacionIndicador {
-  private readonly logger = new Logger(OcupacionIndicador.name);
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly secciones: SeccionesRepository,
-  ) {}
-
-  async calcular(filtros: FiltrosReportesDto): Promise<OcupacionValor> {
-    const desde = new Date(filtros.desde);
-    const hasta = new Date(filtros.hasta);
-    hasta.setHours(23, 59, 59, 999);
-
-    const reservas = await this.prisma.reservation.findMany({
-      where: {
-        status: 'CONFIRMADA',
-        startsAt: { gte: desde },
-        endsAt: { lte: hasta },
-      },
-      select: { startsAt: true, endsAt: true },
-    });
-
-    let horasReservadas = 0;
-    // ✅ Tipado explícito para evitar el error "Parameter 'r' implicitly has an 'any' type"
-    reservas.forEach((r: { startsAt: Date; endsAt: Date }) => {
-      horasReservadas +=
-        (r.endsAt.getTime() - r.startsAt.getTime()) / (1000 * 60 * 60);
-    });
-
-    const horasPermitidas = 100;
-    const porcentaje =
-      horasPermitidas > 0 ? (horasReservadas / horasPermitidas) * 100 : 0;
-
-    return { porcentaje: parseFloat(porcentaje.toFixed(2)) };
+export class OcupacionIndicador implements IndicadorResumen<{ porcentaje: number }> {
+  async calcular(_filtros: FiltrosResumen): Promise<{ porcentaje: number }> {
+    throw new FuenteNoDisponibleError('ocupacion', 'vw_ocupacion_areas / H27');
   }
 }
