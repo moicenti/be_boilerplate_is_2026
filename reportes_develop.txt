@@ -1,0 +1,365 @@
+=== src/reportes/reportes.module.ts
+import { Module } from '@nestjs/common';
+import { ReportesController } from '@Reportes/controllers';
+import { SeccionesRepository } from '@Reportes/repositories';
+import {
+  IncidenciasIndicador,
+  MorosidadIndicador,
+  OcupacionIndicador,
+  ParticipacionIndicador,
+  ReporteIncidenciasService,
+  ReporteParticipacionService,
+  ResumenService,
+} from '@Reportes/services';
+
+@Module({
+  controllers: [ReportesController],
+  providers: [
+    ResumenService,
+    SeccionesRepository,
+    MorosidadIndicador,
+    OcupacionIndicador,
+    IncidenciasIndicador,
+    ParticipacionIndicador,
+    ReporteIncidenciasService,
+    ReporteParticipacionService,
+  ],
+})
+export class ReportesModule {}=== src/reportes/controllers/reportes.controller.ts
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { Roles } from '../../auth/decorators/roles.decorator.js';
+
+import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
+import { ResumenService } from '../resumen.service.js';
+import type { ResumenResponse } from '../resumen.service.js';
+import { SeccionesRepository } from '../repositories/secciones.repository.js';
+
+@ApiTags('reportes')
+@ApiBearerAuth()
+@Controller('reportes')
+export class ReportesController {
+  constructor(
+    private readonly resumen: ResumenService,
+    private readonly secciones: SeccionesRepository,
+  ) {}
+
+  @Get('resumen')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'H26: los 4 indicadores del panel en una sola consulta',
+  })
+  obtenerResumen(
+    @Query() filtros: FiltrosReportesDto,
+  ): Promise<ResumenResponse> {
+    return this.resumen.obtenerResumen(filtros);
+  }
+
+  @Get('secciones')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
+  listarSecciones() {
+    return this.secciones.listar();
+  }
+}
+=== src/reportes/reportes.controller.ts
+import { Controller, Get, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
+import { Roles } from '../../auth/decorators/roles.decorator.js';
+
+import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
+import { ResumenService } from '../resumen.service.js';
+import type { ResumenResponse } from '../resumen.service.js';
+import { SeccionesRepository } from '../repositories/secciones.repository.js';
+
+@ApiTags('reportes')
+@ApiBearerAuth()
+@Controller('reportes')
+export class ReportesController {
+  constructor(
+    private readonly resumen: ResumenService,
+    private readonly secciones: SeccionesRepository,
+  ) {}
+
+  @Get('resumen')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({
+    summary: 'H26: los 4 indicadores del panel en una sola consulta',
+  })
+  obtenerResumen(
+    @Query() filtros: FiltrosReportesDto,
+  ): Promise<ResumenResponse> {
+    return this.resumen.obtenerResumen(filtros);
+  }
+
+  @Get('secciones')
+  @Roles(Role.ADMINISTRADOR)
+  @ApiOperation({ summary: 'Listado de secciones para el filtro del panel' })
+  listarSecciones() {
+    return this.secciones.listar();
+  }
+}
+=== src/reportes/dto/filtros-reportes.dto.ts
+import { BadRequestException } from '@nestjs/common';
+import { IsDateString, IsInt, IsOptional, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+
+/**
+ * H30 · DTO Compartido para filtros de periodo y sección.
+ * Reutilizado por: Resumen (H26), Morosidad (H2), Áreas Comunes (H27),
+ * Incidencias (H28) y Votaciones (H29).
+ */
+export class FiltrosReportesDto {
+  @IsDateString()
+  desde!: string;
+
+  @IsDateString()
+  hasta!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seccion?: number;
+
+  /**
+   * H30 · Validación cruzada: desde <= hasta.
+   * Lanza 400 FILTROS_INVALIDOS si las fechas son inválidas.
+   */
+  validar(): void {
+    const d = new Date(this.desde);
+    const h = new Date(this.hasta);
+
+    if (Number.isNaN(d.getTime()) || Number.isNaN(h.getTime())) {
+      throw new BadRequestException({
+        codigo: 'FILTROS_INVALIDOS',
+        mensaje: 'Las fechas deben tener formato YYYY-MM-DD',
+      });
+    }
+    if (d > h) {
+      throw new BadRequestException({
+        codigo: 'FILTROS_INVALIDOS',
+        mensaje: 'La fecha "desde" no puede ser mayor que "hasta"',
+      });
+    }
+  }
+}
+=== src/reportes/services/index.ts
+export * from './resumen.service.js';
+export * from './reporte-incidencias.service.js';
+export * from './reporte-participacion.service.js';
+export * from './indicadores/index.js';
+=== src/reportes/services/reporte-incidencias.service.ts
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { PrismaService } from '@Prisma/services';
+import type { FiltrosResumen, ResumenQueryDto } from '@Reportes/dto';
+import { SeccionesRepository } from '@Reportes/repositories';
+import { esFechaValida, hoyEnElSalvador, primerDiaDelMes } from './filtros-resumen.js';
+
+export interface IncidenciaAbiertaRow {
+  id: string;
+  folio: string;
+  titulo: string;
+  categoria: string;
+  ubicacion: string;
+  unidad: string;
+  seccion: string;
+  estado: string;
+  prioridad: string;
+  fecha_creacion: Date;
+  dias_abierta: number;
+}
+
+const filtrosInvalidos = (mensaje: string) =>
+  new BadRequestException({ codigo: 'FILTROS_INVALIDOS', mensaje });
+
+@Injectable()
+export class ReporteIncidenciasService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly secciones: SeccionesRepository,
+  ) {}
+
+  async obtenerReporte(query: ResumenQueryDto) {
+    const filtros = await this.validarFiltros(query);
+
+    const inicioUtc = new Date(`${filtros.desde}T00:00:00-06:00`);
+    const finUtc = new Date(`${filtros.hasta}T23:59:59.999-06:00`);
+
+    const filas = filtros.seccion
+      ? await this.prisma.$queryRaw<IncidenciaAbiertaRow[]>`
+          SELECT id, folio, titulo, categoria, ubicacion, unidad, seccion, estado, prioridad, fecha_creacion, dias_abierta
+          FROM vw_incidencias_abiertas
+          WHERE fecha_creacion >= ${inicioUtc}
+            AND fecha_creacion <= ${finUtc}
+            AND seccion = ${filtros.seccion}
+          ORDER BY fecha_creacion ASC
+        `
+      : await this.prisma.$queryRaw<IncidenciaAbiertaRow[]>`
+          SELECT id, folio, titulo, categoria, ubicacion, unidad, seccion, estado, prioridad, fecha_creacion, dias_abierta
+          FROM vw_incidencias_abiertas
+          WHERE fecha_creacion >= ${inicioUtc}
+            AND fecha_creacion <= ${finUtc}
+          ORDER BY fecha_creacion ASC
+        `;
+
+    const porEstado: Record<string, number> = {
+      ABIERTO: 0,
+      EN_PROCESO: 0,
+    };
+
+    const porPrioridad: Record<string, number> = {
+      BAJA: 0,
+      MEDIA: 0,
+      ALTA: 0,
+      CRITICA: 0,
+      SIN_PRIORIDAD: 0,
+    };
+
+    for (const item of filas) {
+      porEstado[item.estado] = (porEstado[item.estado] ?? 0) + 1;
+      porPrioridad[item.prioridad] = (porPrioridad[item.prioridad] ?? 0) + 1;
+    }
+
+    return {
+      total: filas.length,
+      porEstado,
+      porPrioridad,
+      lista: filas.map((item) => ({
+        id: item.id,
+        folio: item.folio,
+        titulo: item.titulo,
+        categoria: item.categoria,
+        ubicacion: item.ubicacion,
+        unidad: item.unidad,
+        seccion: item.seccion,
+        estado: item.estado,
+        prioridad: item.prioridad,
+        fechaCreacion: item.fecha_creacion,
+        diasAbierta: Number(item.dias_abierta),
+      })),
+    };
+  }
+
+  private async validarFiltros(query: ResumenQueryDto): Promise<FiltrosResumen> {
+    const hoy = hoyEnElSalvador();
+    const desde = this.validarFecha('desde', query.desde, primerDiaDelMes(hoy));
+    const hasta = this.validarFecha('hasta', query.hasta, hoy);
+    if (desde > hasta) {
+      throw filtrosInvalidos("La fecha 'desde' no puede ser mayor que 'hasta'");
+    }
+
+    let seccion: string | undefined;
+    if (query.seccion !== undefined) {
+      if (typeof query.seccion !== 'string' || query.seccion.trim() === '') {
+        throw filtrosInvalidos("'seccion' no puede estar vacía");
+      }
+      seccion = query.seccion.trim();
+      if (!(await this.secciones.existe(seccion))) {
+        throw filtrosInvalidos(`La sección '${seccion}' no existe`);
+      }
+    }
+
+    return seccion ? { desde, hasta, seccion } : { desde, hasta };
+  }
+
+  private validarFecha(nombre: string, valor: unknown, defecto: string): string {
+    if (valor === undefined) return defecto;
+    if (typeof valor !== 'string' || !esFechaValida(valor)) {
+      throw filtrosInvalidos(`'${nombre}' debe ser una fecha válida con formato AAAA-MM-DD`);
+    }
+    return valor;
+  }
+}=== src/reportes/services/reporte-participacion.service.ts
+import { Injectable } from '@nestjs/common';
+import { FiltrosReportesDto } from '@Reportes/dto';
+
+@Injectable()
+export class ReporteParticipacionService {
+  async obtenerDetalle(_filtros: FiltrosReportesDto) {
+    return { estado: 'no_disponible' as const };
+  }
+}
+=== src/reportes/resumen.service.ts
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
+import {
+  MorosidadIndicador,
+  type MorosidadValor,
+} from './indicadores/morosidad.indicador.js';
+import {
+  OcupacionIndicador,
+  type OcupacionValor,
+} from './indicadores/ocupacion.indicador.js';
+import {
+  IncidenciasIndicador,
+  type IncidenciasValor,
+} from './indicadores/incidencias.indicador.js';
+import {
+  ParticipacionIndicador,
+  type ParticipacionValor,
+} from './indicadores/participacion.indicador.js';
+import { SeccionesRepository } from './repositories/secciones.repository.js';
+
+export type IndicadorValor<T> = T | { estado: 'no_disponible' };
+
+export interface ResumenResponse {
+  morosidad: IndicadorValor<MorosidadValor>;
+  ocupacion: IndicadorValor<OcupacionValor>;
+  incidencias: IndicadorValor<IncidenciasValor>;
+  participacion: IndicadorValor<ParticipacionValor>;
+}
+
+@Injectable()
+export class ResumenService {
+  private readonly logger = new Logger(ResumenService.name);
+
+  constructor(
+    private readonly morosidad: MorosidadIndicador,
+    private readonly ocupacion: OcupacionIndicador,
+    private readonly incidencias: IncidenciasIndicador,
+    private readonly participacion: ParticipacionIndicador,
+    private readonly secciones: SeccionesRepository,
+  ) {}
+
+  async obtenerResumen(filtros: FiltrosReportesDto): Promise<ResumenResponse> {
+    filtros.validar();
+
+    if (filtros.seccion) {
+      const secciones = await this.secciones.listar();
+      const existe = secciones.some((s) => s.id === filtros.seccion);
+      if (!existe) {
+        throw new BadRequestException({
+          codigo: 'FILTROS_INVALIDOS',
+          mensaje: `La sección con ID ${filtros.seccion} no existe`,
+        });
+      }
+    }
+
+    const [m, o, i, p] = await Promise.allSettled([
+      this.morosidad.calcular(filtros),
+      this.ocupacion.calcular(filtros),
+      this.incidencias.calcular(filtros),
+      this.participacion.calcular(filtros),
+    ]);
+
+    return {
+      morosidad:
+        m.status === 'fulfilled' ? m.value : { estado: 'no_disponible' },
+      ocupacion:
+        o.status === 'fulfilled' ? o.value : { estado: 'no_disponible' },
+      incidencias:
+        i.status === 'fulfilled' ? i.value : { estado: 'no_disponible' },
+      participacion:
+        p.status === 'fulfilled' ? p.value : { estado: 'no_disponible' },
+    };
+  }
+}
+=== src/reportes/index.ts
+export * from './reportes.module.js';
+export * from './controllers/index.js';
+export * from './services/index.js';
+export * from './repositories/index.js';
+export * from './dto/index.js';
