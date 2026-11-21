@@ -1,16 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-
-// ✅ Usa el alias exacto de tu tsconfig.json para el enum Role
 import { Role } from '@prisma/client';
+import { Roles } from '../../auth/decorators/roles.decorator.js';
 
-// ✅ Usa la ruta relativa directa al decorador para evitar fallos de alias
-import { Roles } from '../auth/decorators/roles.decorator.js'; // Ajusta el nombre del archivo si es diferente
-
-import { FiltrosReportesDto } from './dto/filtros-reportes.dto.js';
-import { ResumenService } from './resumen.service.js';
-import type { ResumenResponse } from './resumen.service.js';
-import { SeccionesRepository } from './repositories/secciones.repository.js';
+import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
+import { ResumenService } from '../resumen.service.js';
+import type { ResumenResponse } from '../resumen.service.js';
+import { SeccionesRepository } from '../repositories/secciones.repository.js';
 
 @ApiTags('reportes')
 @ApiBearerAuth()

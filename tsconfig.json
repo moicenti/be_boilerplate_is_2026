@@ -23,8 +23,6 @@
     "paths": {
       "@Auth": ["./src/auth/index.ts"],
       "@Auth/*": ["./src/auth/*/index.ts"],
-      "@Users": ["./src/users/index.ts"],
-      "@Users/*": ["./src/users/*/index.ts"],
       "@Health": ["./src/health/index.ts"],
       "@Health/*": ["./src/health/*/index.ts"],
       "@Prisma": ["./src/prisma/index.ts"],
@@ -36,6 +34,8 @@
       "@Unidades/*": ["./src/unidades/*/index.ts"],
       "@Paquetes": ["./src/paquetes/index.ts"],
       "@Paquetes/*": ["./src/paquetes/*/index.ts"],
+      "@Asambleas": ["./src/asambleas/index.ts"],
+      "@Asambleas/*": ["./src/asambleas/*/index.ts"],
       "@Incidencias": ["./src/incidencias/index.ts"],
       "@Incidencias/*": ["./src/incidencias/*/index.ts"],
       "@CommonAreas": ["./src/common-areas/index.ts"],
@@ -43,7 +43,15 @@
       "@Notificaciones": ["./src/notificaciones/index.ts"],
       "@Notificaciones/*": ["./src/notificaciones/*/index.ts"],
       "@Reportes": ["./src/reportes/index.ts"],
-      "@Reportes/*": ["./src/reportes/*/index.ts"]
+      "@Reportes/*": ["./src/reportes/*/index.ts"],
+      "@Visitas": ["./src/visitas/index.ts"],
+      "@Visitas/*": ["./src/visitas/*/index.ts"],
+      "@Reservas": ["./src/reservas/index.ts"],
+      "@Reservas/*": ["./src/reservas/*/index.ts"],
+      "@Cuotas": ["./src/cuotas/index.ts"],
+      "@Cuotas/*": ["./src/cuotas/*/index.ts"],
+      "@Anuncio": ["./src/anuncio/index.ts"],
+      "@Anuncio/*": ["./src/anuncio/*/index.ts"]
     }
   },
   "include": ["src/**/*"],

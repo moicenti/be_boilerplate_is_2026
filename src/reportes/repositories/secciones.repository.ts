@@ -11,7 +11,6 @@ export interface Seccion {
 export class SeccionesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ✅ MÉTODO listar EXPLÍCITO Y PÚBLICO
   async listar(): Promise<Seccion[]> {
     const unidades = await this.prisma.unit.findMany({
       select: { id: true, code: true, tower: true },
