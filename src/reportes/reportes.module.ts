@@ -8,7 +8,9 @@ import {
   ParticipacionIndicador,
   ReporteIncidenciasService,
   ReporteParticipacionService,
+  ReporteAreasComunesService, // ✅ NUEVO
   ResumenService,
+  ExportarReportesService,
 } from '@Reportes/services';
 
 @Module({
@@ -22,6 +24,9 @@ import {
     ParticipacionIndicador,
     ReporteIncidenciasService,
     ReporteParticipacionService,
+    ReporteAreasComunesService, // ✅ NUEVO
+    ExportarReportesService,
   ],
+  exports: [ResumenService, SeccionesRepository, ReporteAreasComunesService],
 })
 export class ReportesModule {}
