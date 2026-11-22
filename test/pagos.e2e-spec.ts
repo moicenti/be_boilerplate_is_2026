@@ -7,7 +7,7 @@ import { createTestApp, loginAs, resetDatabase, type TestUser } from './setup/cr
 const API = '/api/v1';
 const MISSING_UNIT = '00000000-0000-4000-8000-000000000000';
 
-describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
+describe('H1. Pago de Cuotas Residente (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   const tokens = {} as Record<TestUser, string>;
@@ -61,12 +61,12 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
   });
 
   describe('GET /unidades/:unidadId/estado-de-cuenta', () => {
-    it('una unidad sin cuotas responde 200 con saldo 0 y listas vacías', async () => {
+    it('AC1: una unidad sin cuotas responde 200 con saldo 0 y listas vacías', async () => {
       const res = await statement(unitA).expect(200);
       expect(res.body).toEqual({ unidadId: unitA, saldoTotal: 0, cuotas: [], pagos: [] });
     });
 
-    it('refleja pagos parciales: saldo por cuota y total, cuotas por vencimiento descendente', async () => {
+    it('AC1: refleja pagos parciales: saldo por cuota y total, cuotas por vencimiento descendente', async () => {
       const sep = await createFee(unitA, '2026-09-10', 100);
       const oct = await createFee(unitA, '2026-10-10', 100);
       const nov = await createFee(unitA, '2026-11-10', 100);
@@ -96,36 +96,36 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect(res.body.pagos[0].fechaPago).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-06:00$/);
     });
 
-    it('otro residente de la misma unidad ve el mismo estado de cuenta', async () => {
+    it('AC4: otro residente de la misma unidad ve el mismo estado de cuenta', async () => {
       await createFee(unitA, '2026-11-10', 100);
       const res = await statement(unitA, 'residenteMismaUnidad').expect(200);
       expect(res.body.saldoTotal).toBe(100);
     });
 
-    it('403 RECURSO_AJENO al consultar una unidad ajena, sin exponer datos', async () => {
+    it('AC4: 403 RECURSO_AJENO al consultar una unidad ajena, sin exponer datos', async () => {
       await createFee(unitB, '2026-11-10', 100);
       const res = await statement(unitB).expect(403);
       expect(res.body).toEqual({ codigo: 'RECURSO_AJENO', mensaje: expect.any(String) });
     });
 
-    it('un residente recibe 403 (no 404) aunque la unidad no exista', async () => {
+    it('AC4: un residente recibe 403 (no 404) aunque la unidad no exista', async () => {
       await statement(MISSING_UNIT).expect(403);
     });
 
-    it('el administrador consulta cualquier unidad y recibe 404 si no existe', async () => {
+    it('AC4: el administrador consulta cualquier unidad y recibe 404 si no existe', async () => {
       await createFee(unitB, '2026-11-10', 100);
       expect((await statement(unitB, 'admin').expect(200)).body.saldoTotal).toBe(100);
       expect((await statement(MISSING_UNIT, 'admin').expect(404)).body.codigo).toBe('UNIDAD_INEXISTENTE');
     });
 
-    it('400 si el id no es un UUID, 403 para seguridad y 401 sin sesión', async () => {
+    it('AC4: 400 si el id no es un UUID, 403 para seguridad y 401 sin sesión', async () => {
       expect((await statement('12', 'admin').expect(400)).body.codigo).toBe('SOLICITUD_INVALIDA');
       expect((await statement(unitA, 'seguridad').expect(403)).body.codigo).toBe('ROL_NO_PERMITIDO');
       const res = await http().get(`${API}/unidades/${unitA}/estado-de-cuenta`).expect(401);
       expect(res.body.codigo).toBe('NO_AUTENTICADO');
     });
 
-    it('responde en menos de 2 s con 36 cuotas en la unidad', async () => {
+    it('AC1: responde en menos de 2 s con 36 cuotas en la unidad', async () => {
       const fees: Prisma.FeeCreateManyInput[] = Array.from({ length: 36 }, (_, i) => {
         const month = new Date(Date.UTC(2024, i, 10));
         return {
@@ -155,7 +155,7 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       nov = await createFee(unitA, '2026-11-10', 100);
     });
 
-    it('un pago total deja la cuota PAGADA y el saldo disminuye', async () => {
+    it('AC2: un pago total deja la cuota PAGADA y el saldo disminuye', async () => {
       const res = await pay({ cuotaIds: [oct], monto: 100, referencia: 'TARJ-2026' }).expect(201);
       expect(res.body).toEqual({
         pagoId: expect.any(Number),
@@ -168,7 +168,7 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect(after.body.saldoTotal).toBe(100);
     });
 
-    it('aplica por vencimiento ascendente: la primera PAGADA y la segunda PARCIAL', async () => {
+    it('AC2: aplica por vencimiento ascendente: la primera PAGADA y la segunda PARCIAL', async () => {
       const res = await pay({ cuotaIds: [nov, oct], monto: 150 }).expect(201);
       expect(res.body.aplicado).toEqual([
         { cuotaId: oct, montoAplicado: 100, estadoResultante: 'PAGADA' },
@@ -180,20 +180,20 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect(fees.map((f) => f.status)).toEqual(['PAGADA', 'PARCIAL']);
     });
 
-    it('un pago con decimales completa exactamente el saldo de una cuota PARCIAL', async () => {
+    it('AC2: un pago con decimales completa exactamente el saldo de una cuota PARCIAL', async () => {
       await pay({ cuotaIds: [oct], monto: 33.33 }).expect(201);
       const res = await pay({ cuotaIds: [oct], monto: 66.67 }).expect(201);
       expect(res.body.aplicado[0]).toEqual({ cuotaId: oct, montoAplicado: 66.67, estadoResultante: 'PAGADA' });
     });
 
-    it('422 MONTO_EXCEDE_DEUDA y no registra nada', async () => {
+    it('AC3: 422 MONTO_EXCEDE_DEUDA y no registra nada', async () => {
       const res = await pay({ cuotaIds: [oct], monto: 100.01 }).expect(422);
       expect(res.body.codigo).toBe('MONTO_EXCEDE_DEUDA');
       expect(await paymentCount()).toBe(0);
       expect((await statement(unitA).expect(200)).body.saldoTotal).toBe(200);
     });
 
-    it('409 con una referencia repetida, sin modificar saldos', async () => {
+    it('AC6: 409 con una referencia repetida, sin modificar saldos', async () => {
       await pay({ cuotaIds: [oct], monto: 10, referencia: 'TARJ-2026' }).expect(201);
       const res = await pay({ cuotaIds: [nov], monto: 10, referencia: 'TARJ-2026' }).expect(409);
       expect(res.body.codigo).toBe('CUOTA_YA_PAGADA');
@@ -201,7 +201,7 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect((await statement(unitA).expect(200)).body.saldoTotal).toBe(190);
     });
 
-    it('409 al volver a pagar una cuota ya pagada o anulada', async () => {
+    it('AC6: 409 al volver a pagar una cuota ya pagada o anulada', async () => {
       await pay({ cuotaIds: [oct], monto: 100 }).expect(201);
       expect((await pay({ cuotaIds: [oct], monto: 1 }).expect(409)).body.codigo).toBe('CUOTA_YA_PAGADA');
 
@@ -209,14 +209,14 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect((await pay({ cuotaIds: [nov], monto: 1 }).expect(409)).body.codigo).toBe('CUOTA_YA_PAGADA');
     });
 
-    it('404 CUOTA_INEXISTENTE para una cuota inexistente o de otra unidad', async () => {
+    it('AC4: 404 CUOTA_INEXISTENTE para una cuota inexistente o de otra unidad', async () => {
       const foreign = await createFee(unitB, '2026-11-10', 100);
       expect((await pay({ cuotaIds: [999999], monto: 1 }).expect(404)).body.codigo).toBe('CUOTA_INEXISTENTE');
       expect((await pay({ cuotaIds: [oct, foreign], monto: 1 }).expect(404)).body.codigo).toBe('CUOTA_INEXISTENTE');
       expect(await paymentCount()).toBe(0);
     });
 
-    it('400 con lista vacía, monto menor o igual a 0 o cuotas repetidas', async () => {
+    it('AC3: 400 con lista vacía, monto menor o igual a 0 o cuotas repetidas', async () => {
       for (const body of [
         { cuotaIds: [], monto: 10 },
         { cuotaIds: [oct], monto: 0 },
@@ -228,7 +228,7 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       }
     });
 
-    it('403 RECURSO_AJENO para otra unidad y ROL_NO_PERMITIDO para el administrador', async () => {
+    it('AC4: 403 RECURSO_AJENO para otra unidad y ROL_NO_PERMITIDO para el administrador', async () => {
       const foreign = await createFee(unitB, '2026-11-10', 100);
       const ajeno = await pay({ unidadId: unitB, cuotaIds: [foreign], monto: 10 }).expect(403);
       expect(ajeno.body.codigo).toBe('RECURSO_AJENO');
@@ -238,18 +238,18 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       expect(await paymentCount()).toBe(0);
     });
 
-    it('la tarjeta de prueba que termina en 2026 se acepta', async () => {
+    it('AC5: la tarjeta de prueba que termina en 2026 se acepta', async () => {
       const res = await pay({ cuotaIds: [oct], monto: 100, tarjetaUltimos4: '2026' }).expect(201);
       expect(res.body.aplicado[0].estadoResultante).toBe('PAGADA');
     });
 
-    it('la tarjeta de prueba que termina en 2000 se rechaza con 402 y no se registra nada', async () => {
+    it('AC5: la tarjeta de prueba que termina en 2000 se rechaza con 402 y no se registra nada', async () => {
       const res = await pay({ cuotaIds: [oct], monto: 100, tarjetaUltimos4: '2000' }).expect(402);
       expect(res.body.codigo).toBe('PAGO_RECHAZADO');
       expect(await paymentCount()).toBe(0);
     });
 
-    it('un error a mitad de la transacción revierte todos los cambios', async () => {
+    it('AC2: un error a mitad de la transacción revierte todos los cambios', async () => {
       // El pago y lo aplicado ya se insertaron cuando falla la actualización de la cuota.
       const original = prisma.$transaction.bind(prisma) as (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
       const spy = vi.spyOn(prisma, '$transaction').mockImplementationOnce(((fn: (tx: unknown) => Promise<unknown>) =>
@@ -281,7 +281,7 @@ describe('Estado de cuenta y pago de cuotas (e2e) - H1', () => {
       await pay({ cuotaIds: [oct, nov], monto: 150, referencia: 'TARJ-ROLLBACK' }).expect(201);
     });
 
-    it('dos pagos simultáneos de la misma cuota: uno se registra y el otro recibe 409', async () => {
+    it('AC6: dos pagos simultáneos de la misma cuota: uno se registra y el otro recibe 409', async () => {
       const results = await Promise.all([
         pay({ cuotaIds: [oct], monto: 100 }),
         pay({ cuotaIds: [oct], monto: 100 }, 'residenteMismaUnidad'),

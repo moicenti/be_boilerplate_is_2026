@@ -13,7 +13,7 @@ import {
 const API = '/api/v1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-describe('Unidades en mora (e2e) - H2', () => {
+describe('H2. Visualización de unidades en mora (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminToken: string;
@@ -90,7 +90,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     await app.close();
   });
 
-  it('lista cada unidad morosa con la fecha desde la que está en mora y lo que adeuda', async () => {
+  it('AC1: lista cada unidad morosa con la fecha desde la que está en mora y lo que adeuda', async () => {
     // A-304 pagó 40 de la cuota PARCIAL.
     const partial = await prisma.fee.findFirstOrThrow({
       where: { status: 'PARCIAL' },
@@ -141,7 +141,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     });
   });
 
-  it('una unidad que paga todo lo vencido deja de aparecer', async () => {
+  it('AC2: una unidad que paga todo lo vencido deja de aparecer', async () => {
     const residentToken = await loginAs(app, 'residente');
     const overdue = await prisma.fee.findMany({
       where: {
@@ -166,7 +166,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     ).toEqual(['A-101']);
   });
 
-  it('filtra por torre sin distinguir mayúsculas', async () => {
+  it('AC3: filtra por torre sin distinguir mayúsculas', async () => {
     await addFee('B-202', -3);
 
     const towerB = await mora('?torre=torre%20b').expect(200);
@@ -182,7 +182,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     expect(none.body).toMatchObject({ total: 0, items: [] });
   });
 
-  it('filtra por antigüedad mínima de la mora', async () => {
+  it('AC3: filtra por antigüedad mínima de la mora', async () => {
     const res = await mora('?antiguedadMinDias=30').expect(200);
     expect(res.body.total).toBe(1);
     expect(res.body.items[0]).toMatchObject({
@@ -198,7 +198,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     );
   });
 
-  it('ordena y pagina', async () => {
+  it('AC1: ordena y pagina', async () => {
     const byAmount = await mora('?orden=montoAdeudado').expect(200);
     expect(
       byAmount.body.items.map((u: { codigoUnidad: string }) => u.codigoUnidad),
@@ -214,7 +214,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     expect(beyond.body).toMatchObject({ total: 2, items: [] });
   });
 
-  it('400 SOLICITUD_INVALIDA con parámetros inválidos', async () => {
+  it('AC3: 400 SOLICITUD_INVALIDA con parámetros inválidos', async () => {
     for (const query of [
       '?pagina=0',
       '?tamano=101',
@@ -229,13 +229,13 @@ describe('Unidades en mora (e2e) - H2', () => {
     }
   });
 
-  it('401 NO_AUTENTICADO sin sesión', async () => {
+  it('AC4: 401 NO_AUTENTICADO sin sesión', async () => {
     const res = await http().get(`${API}/unidades/mora`).expect(401);
     expect(res.body.codigo).toBe('NO_AUTENTICADO');
   });
 
   it.each(['residente', 'seguridad'] as const)(
-    '403 ROL_NO_PERMITIDO para %s',
+    'AC4: 403 ROL_NO_PERMITIDO para %s',
     async (user) => {
       const token = await loginAs(app, user);
       const res = await http()
@@ -246,7 +246,7 @@ describe('Unidades en mora (e2e) - H2', () => {
     },
   );
 
-  it('responde en menos de 2 s con 500 unidades en mora', async () => {
+  it('AC1: responde en menos de 2 s con 500 unidades en mora', async () => {
     const codes = Array.from({ length: 500 }, (_, i) => `P-${i + 1}`);
     await addUnits(codes, 'Torre P');
     await prisma.fee.createMany({
