@@ -5,9 +5,11 @@ import { IncidenciasService } from '@Incidencias/services';
 import { IncidenciaRepository } from '@Incidencias/repositories';
 import { CreateIncidenciaDto } from '@Incidencias/dto';
 
-describe('IncidenciasService - H7', () => {
+
   let service: IncidenciasService;
-  let repo: { create: any; findAllByUser: any; findOneByIdAndUser: any };
+  let repo: { create: any; findAllByUser: any; findOneByIdAndUser: any; findById: any; findActiveResponsibleById: any; assign: any; findAllAdmin: any; countOpenByPriority: any };
+
+describe('IncidenciasService - H7', () => {
 
   const user = {
     id: 'user-uuid',
@@ -35,6 +37,11 @@ describe('IncidenciasService - H7', () => {
       create: vi.fn(),
       findAllByUser: vi.fn(),
       findOneByIdAndUser: vi.fn(),
+      findById: vi.fn(),
+      findActiveResponsibleById: vi.fn(),
+      assign: vi.fn(),
+      findAllAdmin: vi.fn(),
+      countOpenByPriority: vi.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -103,5 +110,130 @@ describe('IncidenciasService - H7', () => {
       service.create(userWithoutUnit as any, validDto, []),
     ).rejects.toThrow(BadRequestException);
     expect(repo.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('IncidenciasService - H8 (asignación y resolución)', () => {
+
+  beforeEach(async () => {
+  repo = {
+    create: vi.fn(),
+    findAllByUser: vi.fn(),
+    findOneByIdAndUser: vi.fn(),
+    findById: vi.fn(),
+    findActiveResponsibleById: vi.fn(),
+    assign: vi.fn(),
+    findAllAdmin: vi.fn(),
+    countOpenByPriority: vi.fn(),
+  };
+
+  const module: TestingModule = await Test.createTestingModule({
+    providers: [
+      IncidenciasService,
+      {
+        provide: IncidenciaRepository,
+        useValue: repo,
+      },
+    ],
+  }).compile();
+
+  service = module.get<IncidenciasService>(IncidenciasService);
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+ 
+
+  const adminUser = { id: 'admin-uuid', role: 'ADMINISTRADOR' as const };
+  const maintenanceUser = {
+    id: 'maintenance-uuid',
+    role: 'MANTENIMIENTO' as const,
+    isActive: true,
+    email: 'mantenimiento@example.com',
+  };
+
+  const asignarDto = {
+    assigneeId: 'maintenance-uuid',
+    dueDate: '2026-12-01T18:00:00.000Z',
+    priority: 'ALTA' as const,
+  };
+ 
+
+  it('H8-AC1: asigna prioridad, responsable y fecha', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      status: 'Abierto',
+      userId: 'user-uuid',
+    });
+    repo.findActiveResponsibleById.mockResolvedValue(maintenanceUser);
+    repo.assign.mockResolvedValue({
+      id: 'report-uuid',
+      status: 'En atención',
+      priority: 'ALTA',
+      assigneeId: 'maintenance-uuid',
+    });
+
+    const result = await service.assignReport('report-uuid', asignarDto, adminUser);
+
+    expect(repo.assign).toHaveBeenCalledWith(
+      'report-uuid',
+      expect.objectContaining({
+        priority: 'ALTA',
+        assigneeId: 'maintenance-uuid',
+        updatedById: 'admin-uuid',
+        newStatus: 'En atención',
+      }),
+    );
+    expect(result.status).toBe('En atención');
+  });
+
+  const asignarDtoCriticaSinJustificacion = {
+  assigneeId: 'maintenance-uuid',
+  dueDate: '2026-12-01T18:00:00.000Z',
+  priority: 'CRITICA' as const,
+};
+
+ it('H8-AC2: rechaza CRITICA sin justificación', async () => {
+  repo.findById.mockResolvedValue({
+    id: 'report-uuid',
+    status: 'Abierto',
+  });
+
+  repo.findActiveResponsibleById.mockResolvedValue(maintenanceUser);
+
+  await expect(
+    service.assignReport(
+      'report-uuid',
+      asignarDtoCriticaSinJustificacion,
+      adminUser,
+    ),
+  ).rejects.toThrow(BadRequestException);
+
+  expect(repo.assign).not.toHaveBeenCalled();
+});
+
+  it('H8-AC3: rechaza un assignee inactivo', async () => {
+    repo.findById.mockResolvedValue({ id: 'report-uuid', status: 'Abierto' });
+    repo.findActiveResponsibleById.mockResolvedValue(null); // inactivo
+    await expect(
+      service.assignReport('report-uuid', asignarDto, adminUser),
+    ).rejects.toThrow(BadRequestException);
+    expect(repo.assign).not.toHaveBeenCalled();
+  });
+
+  it('H8-AC4: findAllForAdmin devuelve reports + counts', async () => {
+    repo.findAllAdmin.mockResolvedValue([{ id: 'r1' }, { id: 'r2' }]);
+    repo.countOpenByPriority.mockResolvedValue({ ALTA: 1, BAJA: 0, CRITICA: 1 });
+    const result = await service.findAllForAdmin({});
+    expect(result.reports).toHaveLength(2);
+    expect(result.counts).toEqual({ ALTA: 1, BAJA: 0, CRITICA: 1 });
+  });
+
+  it('H8-AC5: rechaza resolver sin comentario', async () => {
+    repo.findById.mockResolvedValue({ id: 'report-uuid', status: 'En atención' });
+    await expect(
+      service.resolveReport('report-uuid', { resolutionComment: '' } as any, adminUser),
+    ).rejects.toThrow(BadRequestException);
   });
 });
