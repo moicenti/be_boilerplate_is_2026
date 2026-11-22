@@ -44,4 +44,4 @@ El proyecto se divide en dos repositorios:
 - [**Frontend (React)**](https://github.com/moicenti/be_boilerplate_is_2026)
 - [**Backend (NestJS)**](https://github.com/moicenti/fe_boilerplate_is_2026)
 
-La documentación completa está en [Frontend](https://github.com/moicenti/be_boilerplate_is_2026).
+La documentación completa está en [Frontend](https://github.com/moicenti/fe_boilerplate_is_2026).
