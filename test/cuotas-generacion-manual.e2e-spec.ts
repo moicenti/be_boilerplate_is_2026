@@ -16,7 +16,7 @@ const PERIOD = '2026-09';
 // 00:05 del 1 de septiembre en El Salvador (UTC-6): la tarea automática genera 2026-09.
 const SEP_1 = new Date('2026-09-01T06:05:00Z');
 
-describe('Generación manual de cuotas (e2e) - H34', () => {
+describe('H34. Generación manual de cuotas con vista previa y resumen de resultados (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let adminToken: string;
@@ -116,7 +116,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     await app.close();
   });
 
-  it('la vista previa muestra unidades, monto y excepciones sin modificar datos', async () => {
+  it('AC1: la vista previa muestra unidades, monto y excepciones sin modificar datos', async () => {
     const ruleId = await createRule();
     const before = await snapshot();
 
@@ -146,7 +146,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it('la ejecución da los mismos totales que la vista previa, con la causa de cada error', async () => {
+  it('AC3: la ejecución da los mismos totales que la vista previa, con la causa de cada error', async () => {
     const ruleId = await createRule();
     const { body: plan } = await preview(ruleId).expect(200);
 
@@ -193,7 +193,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     });
   });
 
-  it('con política OMITIR, las excepciones cuentan como omitidas', async () => {
+  it('AC3: con política OMITIR, las excepciones cuentan como omitidas', async () => {
     const ruleId = await createRule({ politicaInactivas: 'OMITIR' });
     const { body: plan } = await preview(ruleId).expect(200);
     expect(
@@ -210,7 +210,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     });
   });
 
-  it('un periodo atrasado a medio generar: crea solo las cuotas faltantes', async () => {
+  it('AC2: un periodo atrasado a medio generar: crea solo las cuotas faltantes', async () => {
     const ruleId = await createRule();
     await prisma.fee.createMany({
       data: unitIds.slice(0, 5).map((unitId) => ({
@@ -237,7 +237,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     );
   });
 
-  it('una segunda ejecución del mismo periodo retorna creadas en 0', async () => {
+  it('AC2: una segunda ejecución del mismo periodo retorna creadas en 0', async () => {
     const ruleId = await createRule({ politicaInactivas: 'GENERAR' });
     await execute(ruleId).expect(200);
 
@@ -260,7 +260,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     expect(await prisma.fee.count({ where: { ruleId } })).toBe(20);
   });
 
-  it('una unidad con cuota ya generada no vuelve a dar error aunque quede inactiva', async () => {
+  it('AC3: una unidad con cuota ya generada no vuelve a dar error aunque quede inactiva', async () => {
     const ruleId = await createRule();
     await execute(ruleId).expect(200);
     await prisma.unit.update({
@@ -275,7 +275,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     ).toEqual(['QA-019', 'QA-020']);
   });
 
-  it('409 EJECUCION_EN_CURSO si hay una ejecución en curso para la regla y el periodo', async () => {
+  it('AC2: 409 EJECUCION_EN_CURSO si hay una ejecución en curso para la regla y el periodo', async () => {
     const ruleId = await createRule();
     await prisma.generationRun.create({
       data: { ruleId, period: PERIOD, origin: 'AUTOMATICA' },
@@ -292,7 +292,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     await execute(ruleId, '2026-08').expect(200);
   });
 
-  it('una ejecución en curso abandonada hace más de 30 minutos no bloquea', async () => {
+  it('AC2: una ejecución en curso abandonada hace más de 30 minutos no bloquea', async () => {
     const ruleId = await createRule();
     const stale = await prisma.generationRun.create({
       data: {
@@ -309,7 +309,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     ).toMatchObject({ status: 'CON_ERRORES' });
   });
 
-  it('dos ejecuciones simultáneas: una genera y la otra recibe 409 o no crea nada', async () => {
+  it('AC2: dos ejecuciones simultáneas: una genera y la otra recibe 409 o no crea nada', async () => {
     const ruleId = await createRule({ politicaInactivas: 'GENERAR' });
 
     const results = await Promise.all([execute(ruleId), execute(ruleId)]);
@@ -323,7 +323,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     expect(await prisma.fee.count({ where: { ruleId } })).toBe(20);
   });
 
-  it('el historial muestra ejecuciones automáticas y manuales con fecha, periodo, usuario y totales', async () => {
+  it('AC4: el historial muestra ejecuciones automáticas y manuales con fecha, periodo, usuario y totales', async () => {
     const ruleId = await createRule();
     await app.get(FeeGenerationScheduler).runDaily(SEP_1);
     await execute(ruleId, '2026-08').expect(200);
@@ -374,7 +374,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
   });
 
   describe('errores', () => {
-    it('400 SOLICITUD_INVALIDA con un periodo mal formado', async () => {
+    it('AC1: 400 SOLICITUD_INVALIDA con un periodo mal formado', async () => {
       const ruleId = await createRule();
       for (const periodo of ['2026-13', '2026-9', '09-2026', '', 202609]) {
         const res = await preview(ruleId, periodo as string).expect(400);
@@ -397,7 +397,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
         .expect(400);
     });
 
-    it('404 REGLA_INEXISTENTE', async () => {
+    it('AC1: 404 REGLA_INEXISTENTE', async () => {
       for (const res of [
         await preview(9999),
         await execute(9999),
@@ -409,7 +409,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
     });
 
     it.each(['PAUSADA', 'INACTIVA'])(
-      '422 REGLA_INACTIVA con una regla %s, sin crear nada',
+      'AC2: 422 REGLA_INACTIVA con una regla %s, sin crear nada',
       async (estado) => {
         const ruleId = await createRule();
         await http()
@@ -426,7 +426,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
       },
     );
 
-    it('422 REGLA_INACTIVA con un periodo futuro', async () => {
+    it('AC2: 422 REGLA_INACTIVA con un periodo futuro', async () => {
       const ruleId = await createRule();
       for (const res of [
         await preview(ruleId, '2099-01'),
@@ -438,7 +438,7 @@ describe('Generación manual de cuotas (e2e) - H34', () => {
       expect(await snapshot()).toMatchObject({ fees: 0, runs: 0 });
     });
 
-    it('un residente recibe 403 ROL_NO_PERMITIDO en los tres endpoints', async () => {
+    it('AC1: un residente recibe 403 ROL_NO_PERMITIDO en los tres endpoints', async () => {
       const ruleId = await createRule();
       const resident = { Authorization: `Bearer ${residentToken}` };
       for (const res of [

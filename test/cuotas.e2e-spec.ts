@@ -20,7 +20,7 @@ const API = '/api/v1';
 const DEC_1 = new Date('2026-12-01T06:05:00Z');
 const JAN_1 = new Date('2027-01-01T06:05:00Z');
 
-describe('Reglas y generación de cuotas (e2e) - H3', () => {
+describe('H3. Generación automática de cuotas nuevas mensualmente (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let scheduler: FeeGenerationScheduler;
@@ -121,7 +121,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       await prisma.user.deleteMany({ where: { unitId: unitIds[1] } });
     });
 
-    it('en el día configurado crea una cuota PENDIENTE por unidad aplicable', async () => {
+    it('AC1: en el día configurado crea una cuota PENDIENTE por unidad aplicable', async () => {
       const ruleId = await createRule();
       const [run] = await scheduler.runDaily(DEC_1);
 
@@ -146,13 +146,13 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       ).toBe(false);
     });
 
-    it('fuera de su día no genera', async () => {
+    it('AC1: fuera de su día no genera', async () => {
       await createRule({ diaGeneracion: 2, diaVencimiento: 10 });
       expect(await scheduler.runDaily(DEC_1)).toEqual([]);
       expect(await prisma.fee.count()).toBe(0);
     });
 
-    it('ejecutar dos veces el mismo periodo no crea duplicados', async () => {
+    it('AC3: ejecutar dos veces el mismo periodo no crea duplicados', async () => {
       const ruleId = await createRule();
       await scheduler.runDaily(DEC_1);
       const [second] = await scheduler.runDaily(DEC_1);
@@ -167,7 +167,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       expect(await prisma.generationRun.count({ where: { ruleId } })).toBe(2);
     });
 
-    it('cambiar el monto no altera las cuotas generadas; el siguiente periodo usa el nuevo', async () => {
+    it('AC4: cambiar el monto no altera las cuotas generadas; el siguiente periodo usa el nuevo', async () => {
       const ruleId = await createRule();
       await scheduler.runDaily(DEC_1);
 
@@ -187,7 +187,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       expect(january.every((f) => f.amount.toFixed(2) === '150.00')).toBe(true);
     });
 
-    it('una regla PAUSADA no genera aunque llegue su día', async () => {
+    it('AC1: una regla PAUSADA no genera aunque llegue su día', async () => {
       const ruleId = await createRule();
       await http()
         .patch(`${API}/reglas-cuota/${ruleId}/estado`)
@@ -199,14 +199,14 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       expect(await prisma.fee.count()).toBe(0);
     });
 
-    it('política GENERAR incluye inactivas y sin responsable', async () => {
+    it('AC1: política GENERAR incluye inactivas y sin responsable', async () => {
       const ruleId = await createRule({ politicaInactivas: 'GENERAR' });
       const [run] = await scheduler.runDaily(DEC_1);
       expect(run).toMatchObject({ created: 20, omitted: 0, failed: 0 });
       expect(await feesOf(ruleId, '2026-12')).toHaveLength(20);
     });
 
-    it('política REVISAR: las demás se generan y cada caso queda registrado con su causa', async () => {
+    it('AC5: política REVISAR: las demás se generan y cada caso queda registrado con su causa', async () => {
       await createRule({ politicaInactivas: 'REVISAR' });
       const [run] = await scheduler.runDaily(DEC_1);
 
@@ -226,7 +226,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       ]);
     });
 
-    it('una ejecución interrumpida se completa en la siguiente sin duplicar ni perder cuotas', async () => {
+    it('AC3: una ejecución interrumpida se completa en la siguiente sin duplicar ni perder cuotas', async () => {
       const ruleId = await createRule();
       const rows = await prisma.feeRule.findUniqueOrThrow({
         where: { id: ruleId },
@@ -273,7 +273,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       });
     });
 
-    it('no permite dos ejecuciones EN_CURSO para la misma regla y periodo', async () => {
+    it('AC3: no permite dos ejecuciones EN_CURSO para la misma regla y periodo', async () => {
       const ruleId = await createRule();
       await prisma.generationRun.create({
         data: { ruleId, period: '2026-12', origin: 'MANUAL' },
@@ -290,7 +290,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
     });
   });
 
-  it('monto por tipo de unidad y alcance por selección', async () => {
+  it('AC2: monto por tipo de unidad y alcance por selección', async () => {
     const [house, shop, other] = await createUnits(3);
     await prisma.unit.update({ where: { id: house }, data: { type: 'CASA' } });
     await prisma.unit.update({ where: { id: shop }, data: { type: 'LOCAL' } });
@@ -316,7 +316,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
     expect(amounts[other]).toBeUndefined();
   });
 
-  it('procesa 500 unidades en menos de 1 minuto', async () => {
+  it('AC1: procesa 500 unidades en menos de 1 minuto', async () => {
     await createUnits(500);
     await createRule();
 
@@ -329,7 +329,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
   }, 90_000);
 
   describe('API de reglas', () => {
-    it('registra creación, edición y cambio de estado con usuario y fecha', async () => {
+    it('AC2: registra creación, edición y cambio de estado con usuario y fecha', async () => {
       await createUnits(1);
       const ruleId = await createRule();
       await http()
@@ -362,7 +362,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       });
     });
 
-    it('una regla con cuotas no se elimina: solo se desactiva y conserva su historial', async () => {
+    it('AC4: una regla con cuotas no se elimina: solo se desactiva y conserva su historial', async () => {
       await createUnits(2);
       const ruleId = await createRule();
       await scheduler.runDaily(DEC_1);
@@ -378,7 +378,7 @@ describe('Reglas y generación de cuotas (e2e) - H3', () => {
       expect(await prisma.fee.count({ where: { ruleId } })).toBe(2);
     });
 
-    it('un residente recibe 403 en todos los endpoints', async () => {
+    it('AC2: un residente recibe 403 en todos los endpoints', async () => {
       const ruleId = await createRule({ estado: 'INACTIVA' });
       const resident = { Authorization: `Bearer ${residentToken}` };
       const calls = [
