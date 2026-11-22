@@ -22,11 +22,43 @@ const RESOLVABLE_STATUSES = ['En atención'];
 export class IncidenciasService {
   constructor(private readonly incidenciaRepository: IncidenciaRepository) {}
 
-  async create(
+    async create(
     user: { id: string; unit?: Unit | null },
     data: CreateIncidenciaDto,
     photoUrls: string[],
   ) {
+    const title = data.title?.trim() ?? '';
+    if (title.length < 5) {
+      throw new BadRequestException(
+        'El asunto debe tener al menos 5 caracteres',
+      );
+    }
+    if (title.length > 100) {
+      throw new BadRequestException(
+        'El asunto no puede exceder los 100 caracteres',
+      );
+    }
+
+    const description = data.description?.trim() ?? '';
+    if (description.length < 20) {
+      throw new BadRequestException(
+        'La descripción debe tener al menos 20 caracteres',
+      );
+    }
+    if (description.length > 500) {
+      throw new BadRequestException(
+        'La descripción no puede exceder los 500 caracteres',
+      );
+    }
+
+    if (!data.category?.trim()) {
+      throw new BadRequestException('La categoría es obligatoria');
+    }
+
+    if (!data.location?.trim()) {
+      throw new BadRequestException('La ubicación es obligatoria');
+    }
+
     if (!user.unit) {
       throw new BadRequestException(
         'Tu usuario no tiene una unidad asignada. Contacta a la administración.',
@@ -46,7 +78,7 @@ export class IncidenciasService {
       user.id,
       user.unit.code,
       folio,
-      data,
+      { ...data, title, description },
       photoUrls,
     );
   }
