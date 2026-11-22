@@ -4,10 +4,23 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { IncidenciasService } from '@Incidencias/services';
 import { IncidenciaRepository } from '@Incidencias/repositories';
 import { CreateIncidenciaDto } from '@Incidencias/dto';
+import { ForbiddenException } from '@nestjs/common';
 
 
   let service: IncidenciasService;
-  let repo: { create: any; findAllByUser: any; findOneByIdAndUser: any; findById: any; findActiveResponsibleById: any; assign: any; findAllAdmin: any; countOpenByPriority: any };
+  let repo: { 
+    create: any; 
+    findAllByUser: any; 
+    findOneByIdAndUser: any; 
+    findById: any; 
+    findActiveResponsibleById: any; 
+    assign: any; 
+    findAllAdmin: any; 
+    countOpenByPriority: any;
+    confirmResolution: any;
+    rejectResolution: any;
+
+  };
 
 describe('IncidenciasService - H7', () => {
 
@@ -42,6 +55,8 @@ describe('IncidenciasService - H7', () => {
       assign: vi.fn(),
       findAllAdmin: vi.fn(),
       countOpenByPriority: vi.fn(),
+      confirmResolution: vi.fn(),
+      rejectResolution: vi.fn(),    
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -125,6 +140,9 @@ describe('IncidenciasService - H8 (asignación y resolución)', () => {
     assign: vi.fn(),
     findAllAdmin: vi.fn(),
     countOpenByPriority: vi.fn(),
+    confirmResolution: vi.fn(),
+    rejectResolution: vi.fn(),
+
   };
 
   const module: TestingModule = await Test.createTestingModule({
@@ -235,5 +253,159 @@ afterEach(() => {
     await expect(
       service.resolveReport('report-uuid', { resolutionComment: '' } as any, adminUser),
     ).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('IncidenciasService - H9 (confirmar/rechazar resolución)', () => {
+
+    const user = {
+    id: 'user-uuid',
+    unit: {
+      id: 'unit-uuid',
+      code: 'A-19',
+      tower: 'Torre A',
+      description: 'Torre A, departamento 19',
+      type: 'DEPARTAMENTO' as const,
+      active: true,
+      createdAt: new Date('2026-01-01T00:00:00-06:00'),
+      historyStartsAt: null,
+    },
+  };
+
+  const validDto: CreateIncidenciaDto = {
+    title: 'Luminaria apagada en pasillo',
+    description: 'La luminaria no enciende desde anoche y el pasillo queda oscuro al salir.',
+    category: 'Mantenimiento',
+    location: 'Torre A · Piso 3',
+  };
+
+  beforeEach(async () => {
+    repo = {
+      create: vi.fn(),
+      findAllByUser: vi.fn(),
+      findOneByIdAndUser: vi.fn(),
+      findById: vi.fn(),
+      findActiveResponsibleById: vi.fn(),
+      assign: vi.fn(),
+      findAllAdmin: vi.fn(),
+      countOpenByPriority: vi.fn(),
+      confirmResolution: vi.fn(),
+      rejectResolution: vi.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        IncidenciasService,
+        { provide: IncidenciaRepository, useValue: repo },
+      ],
+    }).compile();
+
+    service = module.get<IncidenciasService>(IncidenciasService);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+
+
+  const residente = { id: 'residente-uuid' };
+
+  it('H9-AC1: findOne devuelve resolutionComment cuando está Resuelto', async () => {
+    repo.findOneByIdAndUser.mockResolvedValue({
+      id: 'report-uuid',
+      status: 'Resuelto',
+      resolutionComment: 'Se reparó la luminaria.',
+      resolvedAt: new Date(),
+    });
+
+    const result = await service.findOne('report-uuid', 'residente-uuid');
+
+    expect(result.status).toBe('Resuelto');
+    expect(result.resolutionComment).toBe('Se reparó la luminaria.');
+  });
+
+  it('H9-AC2: confirmResolution pasa a Cerrado y crea evento CONFIRMADO', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      userId: 'residente-uuid',
+      status: 'Resuelto',
+    });
+    repo.confirmResolution.mockResolvedValue({
+      id: 'report-uuid',
+      status: 'Cerrado',
+      events: [{ action: 'CONFIRMADO' }],
+    });
+
+    const result = await service.confirmResolution('report-uuid', 'residente-uuid');
+
+    expect(repo.confirmResolution).toHaveBeenCalledWith('report-uuid', 'residente-uuid');
+    expect(result.status).toBe('Cerrado');
+  });
+
+  it('H9-AC3: rejectResolution pasa a Rechazado con comentario válido', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      userId: 'residente-uuid',
+      status: 'Resuelto',
+    });
+    repo.rejectResolution.mockResolvedValue({
+      id: 'report-uuid',
+      status: 'Rechazado',
+      events: [{ action: 'RECHAZADO' }],
+    });
+
+    const result = await service.rejectResolution(
+      'report-uuid',
+      'residente-uuid',
+      'La fuga sigue activa.',
+    );
+
+    expect(repo.rejectResolution).toHaveBeenCalledWith(
+      'report-uuid',
+      'residente-uuid',
+      'La fuga sigue activa.',
+    );
+    expect(result.status).toBe('Rechazado');
+  });
+
+  it('H9-AC4: rejectResolution rechaza si el comentario es inválido', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      userId: 'residente-uuid',
+      status: 'Resuelto',
+    });
+
+    await expect(
+      service.rejectResolution('report-uuid', 'residente-uuid', ''),
+    ).rejects.toThrow(BadRequestException);
+
+    await expect(
+      service.rejectResolution('report-uuid', 'residente-uuid', 'corto'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('H9-AC5a: confirmResolution rechaza si el reporte no está Resuelto', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      userId: 'residente-uuid',
+      status: 'Abierto',
+    });
+
+    await expect(
+      service.confirmResolution('report-uuid', 'residente-uuid'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('H9-AC5b: confirmResolution rechaza si no es el dueño', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'report-uuid',
+      userId: 'otro-uuid',
+      status: 'Resuelto',
+    });
+
+    await expect(
+      service.confirmResolution('report-uuid', 'residente-uuid'),
+    ).rejects.toThrow(ForbiddenException);
   });
 });
