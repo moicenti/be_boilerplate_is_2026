@@ -31,6 +31,7 @@
       "@Prisma/*": ["./prisma/*"],
       "@PrismaClient": ["./generated/prisma/client.ts"],
       "@Config": ["./config/index.ts"],
+      "@Config/*": ["./config/*"],
       "@Common/*": ["./common/*"],
       "@Unidades": ["./unidades/index.ts"],
       "@Unidades/*": ["./unidades/*"],
