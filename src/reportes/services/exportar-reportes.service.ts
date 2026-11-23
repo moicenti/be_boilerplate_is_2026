@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import * as PDFDocument from 'pdfkit';
+import PDFDocument from 'pdfkit';
 import { FiltrosReportesDto } from '../dto/filtros-reportes.dto.js';
 import { ResumenService } from './resumen.service.js';
 import { ReporteAreasComunesService } from './reporte-areas-comunes.service.js';
