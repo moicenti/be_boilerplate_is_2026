@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { PreautorizacionService } from './preautorizacion.service.js';
-import { PreautorizacionRepository } from '../repositories/index.js';
+import { PreautorizacionService } from '@Visitas/services';
+import { PreautorizacionRepository } from '@Visitas/repositories';
 
 describe('PreautorizacionService - H10', () => {
   let service: PreautorizacionService;
